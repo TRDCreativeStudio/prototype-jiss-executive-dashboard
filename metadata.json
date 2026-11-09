@@ -1,0 +1,6 @@
+{
+  "name": "JISS Internal Operations Control System",
+  "description": "Internal operations control system for JISS security services, managing project readiness, BOQ, cross-department workflows, and live role switching.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

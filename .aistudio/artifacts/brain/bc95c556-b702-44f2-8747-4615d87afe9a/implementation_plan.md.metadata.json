@@ -1,0 +1,6 @@
+{
+  "summary":  "Revised implementation plan aligning JISS with the official End-to-End Business Process HD map and MVP PRD. Streamlines out-of-scope legacy features (removes complex custom vendor quote workflows and separate Admin Area screen) and solidifies the 4 core lifecycle stages: 01 Request & FPK, 02 Review & Approval, 03 Project & Mobilization (with Jalan Tanpa SPK & PIC Area Start Guard), 04 SPK & Contract Control, plus Expiration (H-75/H-60/H-30) and Personnel Mutation/Replacement.",
+  "updatedAt":  "2026-11-07T12:51:41.938852861Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}
