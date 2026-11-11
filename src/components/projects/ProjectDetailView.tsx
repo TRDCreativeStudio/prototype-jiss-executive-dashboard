@@ -19,7 +19,8 @@ import {
   Send,
   UserCheck
 } from 'lucide-react';
-import { SPK } from '../../types';
+import { SPK, Site } from '../../types';
+import { SiteDetailDrawer } from './SiteDetailDrawer';
 
 export const ProjectDetailView: React.FC = () => {
   const { 
@@ -29,11 +30,13 @@ export const ProjectDetailView: React.FC = () => {
     fpks, 
     clients, 
     areas, 
+    personnel,
     externalMemos,
     setActiveView 
   } = useApp();
 
   const [previewSpkDoc, setPreviewSpkDoc] = useState<SPK | null>(null);
+  const [selectedSiteModal, setSelectedSiteModal] = useState<Site | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const project = selectedProject;
@@ -439,7 +442,9 @@ export const ProjectDetailView: React.FC = () => {
               {linkedSites.map((site) => (
                 <div 
                   key={site.id} 
-                  className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 first:pt-1 last:pb-1"
+                  onClick={() => setSelectedSiteModal(site)}
+                  className="py-3.5 px-2 rounded-lg flex flex-col sm:flex-row sm:items-center justify-between gap-3 first:pt-1 last:pb-1 hover:bg-slate-50 transition-colors cursor-pointer group"
+                  title="Klik untuk melihat detail lengkap lokasi jaga ini"
                 >
                   {/* Nama lokasi + alamat */}
                   <div className="space-y-0.5 min-w-0 pr-2">
@@ -447,8 +452,11 @@ export const ProjectDetailView: React.FC = () => {
                       <span className="font-mono text-[11px] font-bold bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">
                         {site.siteCode}
                       </span>
-                      <span className="font-bold text-slate-900 text-sm">
+                      <span className="font-bold text-slate-900 text-sm group-hover:text-indigo-600 transition-colors">
                         {site.name}
+                      </span>
+                      <span className="text-[10px] text-indigo-600 font-semibold opacity-0 group-hover:opacity-100 transition-opacity">
+                        Rincian ›
                       </span>
                     </div>
                     <div className="text-[11px] text-slate-500">
@@ -782,6 +790,19 @@ export const ProjectDetailView: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Side Modal Sheet: Detail Lokasi Jaga (Security, Dokumen, Operasional) */}
+      {selectedSiteModal && (
+        <SiteDetailDrawer
+          site={selectedSiteModal}
+          project={project}
+          linkedSPKs={linkedSPKs}
+          areas={areas}
+          allPersonnel={personnel}
+          onClose={() => setSelectedSiteModal(null)}
+          onPreviewSpk={(spk) => setPreviewSpkDoc(spk)}
+        />
       )}
 
     </div>

@@ -16,12 +16,14 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { SPK, Project, Site } from '../../types';
+import { SiteDetailDrawer } from './SiteDetailDrawer';
 
 export const ProjectsView: React.FC = () => {
-  const { projects, sites, spks, clients, setSelectedProjectId, setActiveView } = useApp();
+  const { projects, sites, spks, clients, personnel, areas, setSelectedProjectId, setActiveView } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'without-spk' | 'expiring'>('all');
   const [previewSpk, setPreviewSpk] = useState<SPK | null>(null);
+  const [selectedSiteModal, setSelectedSiteModal] = useState<{ site: Site; project: Project } | null>(null);
   
   // Section 7: Support ?klien=KODE filter from query URL
   const [clientFilterCode, setClientFilterCode] = useState<string>(() => {
@@ -389,15 +391,30 @@ export const ProjectsView: React.FC = () => {
                         const isDraft = siteSpk?.spkNumber.includes('DRAFT') || siteSpk?.verificationStatus === 'Pending Verification';
 
                         return (
-                          <tr key={site.id} className="hover:bg-slate-50/80 transition-colors">
+                          <tr 
+                            key={site.id} 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedSiteModal({ site, project: proj });
+                            }}
+                            className="hover:bg-indigo-50/70 transition-colors cursor-pointer group/row"
+                            title="Klik untuk melihat detail lengkap lokasi jaga ini"
+                          >
                             {/* Lokasi */}
                             <td className="px-4 py-3">
-                              <span className="font-bold text-slate-900 block text-xs">
-                                {site.name}
-                              </span>
-                              <span className="text-[11px] text-slate-500 block">
-                                {site.areaName}
-                              </span>
+                              <div className="flex items-center justify-between gap-1">
+                                <div>
+                                  <span className="font-bold text-slate-900 block text-xs group-hover/row:text-indigo-600 transition-colors">
+                                    {site.name}
+                                  </span>
+                                  <span className="text-[11px] text-slate-500 block">
+                                    {site.areaName}
+                                  </span>
+                                </div>
+                                <span className="text-[10px] text-indigo-600 font-semibold opacity-0 group-hover/row:opacity-100 transition-opacity shrink-0">
+                                  Rincian ›
+                                </span>
+                              </div>
                             </td>
 
                             {/* Petugas: Angka lugas */}
@@ -608,6 +625,19 @@ export const ProjectsView: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Side Modal Sheet: Detail Lokasi Jaga (Security, Dokumen, Operasional) */}
+      {selectedSiteModal && (
+        <SiteDetailDrawer
+          site={selectedSiteModal.site}
+          project={selectedSiteModal.project}
+          linkedSPKs={spks.filter(s => selectedSiteModal.project.spkIds.includes(s.id))}
+          areas={areas}
+          allPersonnel={personnel}
+          onClose={() => setSelectedSiteModal(null)}
+          onPreviewSpk={(spk) => setPreviewSpk(spk)}
+        />
       )}
 
     </div>
