@@ -245,11 +245,15 @@ export interface Client {
   name: string;
   code: string;
   industry: string;
+  address?: string;
   contactPerson: string;
+  contactRole?: string;
   email: string;
   phone: string;
   projectIds: string[];
   contractStatus: 'Active' | 'Under Review' | 'Negotiation';
+  status?: 'aktif' | 'calon' | 'tidak_aktif';
+  updatedAt?: string;
 }
 
 export interface AuditLogEntry {

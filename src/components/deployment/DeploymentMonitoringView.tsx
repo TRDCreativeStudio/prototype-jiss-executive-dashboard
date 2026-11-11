@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 export const DeploymentMonitoringView: React.FC = () => {
-  const { sites, personnel, currentUser, confirmStartGuard, setSelectedProjectId, setActiveView } = useApp();
+  const { sites, personnel, currentUser, confirmStartGuard, requestConfirmation, setSelectedProjectId, setActiveView } = useApp();
 
   const canConfirm = currentUser.role === 'PIC Area' || currentUser.canConfirmStartGuard || currentUser.role === 'BOD';
 
@@ -111,7 +111,15 @@ export const DeploymentMonitoringView: React.FC = () => {
                 ) : (
                   canConfirm ? (
                     <button
-                      onClick={() => confirmStartGuard(site.id)}
+                      onClick={() => {
+                        requestConfirmation({
+                          title: 'Konfirmasi Mulai Tugas di Lokasi Jaga',
+                          message: `Apakah Anda memastikan seluruh petugas keamanan telah hadir di lokasi jaga ${site.name} dan siap aktif bertugas?`,
+                          confirmLabel: 'Konfirmasi Mulai Tugas',
+                          variant: 'primary',
+                          onConfirm: () => confirmStartGuard(site.id),
+                        });
+                      }}
                       className="w-full mt-2 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg text-xs font-bold transition-colors shadow-xs flex items-center justify-center gap-1.5"
                     >
                       <Check className="w-3.5 h-3.5 stroke-[3]" />
@@ -119,7 +127,7 @@ export const DeploymentMonitoringView: React.FC = () => {
                     </button>
                   ) : (
                     <div className="text-[11px] text-slate-500 italic">
-                      Silakan beralih ke peran <strong>Hendra Setiawan (Pengawas Lapangan)</strong> via tombol pojok kanan bawah untuk konfirmasi serah terima pos jaga.
+                      Silakan beralih ke peran <strong>Hendra Setiawan (Pengawas Lapangan)</strong> via menu profil di kanan atas untuk konfirmasi serah terima lokasi jaga.
                     </div>
                   )
                 )}

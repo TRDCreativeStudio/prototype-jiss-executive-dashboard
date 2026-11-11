@@ -1,5 +1,6 @@
 import React from 'react';
 import { useApp } from '../../context/AppContext';
+import { useContracts } from '../../context/ContractContext';
 import { 
   LayoutDashboard, 
   Building2, 
@@ -26,13 +27,22 @@ export const Sidebar: React.FC = () => {
     fpks, 
     spks, 
     projects, 
-    tasks 
+    tasks,
+    currentUser
   } = useApp();
+  const { myActionCount } = useContracts();
 
   const pendingFPKCount = fpks.filter(f => f.status === 'Under Review' || f.status === 'Financial Review' || f.status === 'Pending BOD').length;
+  const isFPKMyAction = (currentUser.role === 'BOD' && fpks.some(f => f.status === 'Pending BOD')) ||
+    (currentUser.role === 'Finance' && fpks.some(f => f.status === 'Financial Review')) ||
+    (['Operations', 'Recruitment', 'Procurement'].includes(currentUser.role) && fpks.some(f => f.status === 'Under Review'));
+
   const pendingSPKVerifyCount = spks.filter(s => s.verificationStatus === 'Pending Verification').length;
-  const jalanTanpaSPKCount = projects.filter(p => p.isJalanTanpaSPK).length;
-  const openTasksCount = tasks.filter(t => t.status === 'Open').length;
+  const isSPKMyAction = currentUser.role === 'Finance' && pendingSPKVerifyCount > 0;
+
+  const expiringMemosCount = spks.filter(s => s.isExpiringSoon).length;
+  const myOpenTasksCount = tasks.filter(t => t.assignedRole === currentUser.role && t.status !== 'Completed').length;
+  const allOpenTasksCount = tasks.filter(t => t.status !== 'Completed').length;
 
   const handleNavigate = (viewKey: string) => {
     setActiveView(viewKey);
@@ -40,7 +50,9 @@ export const Sidebar: React.FC = () => {
   };
 
   const navItemClass = (viewKey: string) => {
-    const isActive = activeView === viewKey || (viewKey === 'deployment' && activeView === 'sites');
+    const isActive = activeView === viewKey ||
+      (viewKey === 'deployment' && activeView === 'sites') ||
+      (viewKey === 'kontrak' && (activeView === 'spk' || activeView === 'memos'));
     return `w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
       isActive
         ? 'bg-slate-800 text-white font-semibold shadow-inner border border-slate-700'
@@ -120,54 +132,40 @@ export const Sidebar: React.FC = () => {
                 <FolderKanban className="w-4 h-4 text-slate-400" />
                 Daftar Proyek
               </span>
-              {jalanTanpaSPKCount > 0 && (
-                <span className="text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-mono font-medium flex items-center gap-0.5">
-                  <Flame className="w-2.5 h-2.5" /> {jalanTanpaSPKCount}
-                </span>
-              )}
             </button>
 
             <button
               onClick={() => handleNavigate('fpk')}
               className={navItemClass('fpk')}
             >
-              <span className="flex items-center gap-2.5">
-                <FileText className="w-4 h-4 text-slate-400" />
-                Pengajuan FPK Baru
+              <span className="flex items-center gap-2.5 text-left min-w-0">
+                <FileText className="w-4 h-4 text-slate-400 shrink-0" />
+                <span className="truncate">Kerja Sama Baru</span>
               </span>
               {pendingFPKCount > 0 && (
-                <span className="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-1.5 py-0.2 rounded-full font-mono">
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono shrink-0 ${
+                  isFPKMyAction
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold'
+                    : 'bg-slate-800 text-slate-400 border border-slate-700/60 font-medium'
+                }`}>
                   {pendingFPKCount}
                 </span>
               )}
             </button>
 
             <button
-              onClick={() => handleNavigate('spk')}
-              className={navItemClass('spk')}
+              onClick={() => handleNavigate('kontrak')}
+              className={navItemClass('kontrak')}
             >
               <span className="flex items-center gap-2.5">
                 <ScrollText className="w-4 h-4 text-slate-400" />
-                Verifikasi SPK & Kontrak
+                Kontrak (SPK)
               </span>
-              {pendingSPKVerifyCount > 0 && (
-                <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded-full font-mono">
-                  {pendingSPKVerifyCount}
+              {myActionCount > 0 && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold">
+                  {myActionCount}
                 </span>
               )}
-            </button>
-
-            <button
-              onClick={() => handleNavigate('memos')}
-              className={navItemClass('memos')}
-            >
-              <span className="flex items-center gap-2.5">
-                <Mail className="w-4 h-4 text-slate-400" />
-                Memo Perpanjangan
-              </span>
-              <span className="text-[9px] bg-slate-800 text-slate-300 px-1.5 py-0.2 rounded font-mono">
-                H-60
-              </span>
             </button>
           </div>
         </div>
@@ -184,7 +182,7 @@ export const Sidebar: React.FC = () => {
             >
               <span className="flex items-center gap-2.5">
                 <ShieldAlert className="w-4 h-4 text-slate-400" />
-                Penempatan & Pos Jaga
+                Penempatan Petugas
               </span>
             </button>
 
@@ -194,7 +192,7 @@ export const Sidebar: React.FC = () => {
             >
               <span className="flex items-center gap-2.5">
                 <Users2 className="w-4 h-4 text-slate-400" />
-                Data Personel Penjagaan
+                Data Petugas
               </span>
             </button>
           </div>
@@ -214,9 +212,13 @@ export const Sidebar: React.FC = () => {
                 <CheckSquare className="w-4 h-4 text-slate-400" />
                 Tugas & Persetujuan
               </span>
-              {openTasksCount > 0 && (
-                <span className="text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/30 px-1.5 py-0.2 rounded-full font-mono">
-                  {openTasksCount}
+              {allOpenTasksCount > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
+                  myOpenTasksCount > 0
+                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold'
+                    : 'bg-slate-800 text-slate-400 border border-slate-700/60 font-medium'
+                }`}>
+                  {myOpenTasksCount > 0 ? myOpenTasksCount : allOpenTasksCount}
                 </span>
               )}
             </button>
@@ -235,7 +237,7 @@ export const Sidebar: React.FC = () => {
             >
               <span className="flex items-center gap-2.5">
                 <ShieldCheck className="w-4 h-4 text-slate-400" />
-                Pengguna & Kewenangan
+                Pengguna & Hak Akses
               </span>
             </button>
 
@@ -254,11 +256,8 @@ export const Sidebar: React.FC = () => {
 
       {/* System Status Footnote */}
       <div className="p-3 border-t border-slate-800 bg-slate-950/40 text-[11px] text-slate-400 shrink-0">
-        <div className="flex items-center gap-2 text-indigo-400 font-semibold">
-          <span>Alur Layanan Terpadu</span>
-        </div>
-        <div className="text-[10px] text-slate-400 mt-0.5">
-          FPK $\rightarrow$ Telaah Tim $\rightarrow$ Proyek $\rightarrow$ Verifikasi SPK
+        <div className="text-[10px] text-slate-400 leading-relaxed">
+          <span className="text-indigo-400 font-semibold">Alur Layanan:</span> Pengajuan → Penelaahan → Pelaksanaan → Verifikasi Kontrak
         </div>
       </div>
     </div>

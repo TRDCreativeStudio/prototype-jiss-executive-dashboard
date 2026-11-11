@@ -128,12 +128,12 @@ export const TasksApprovalsView: React.FC = () => {
                         Buka FPK
                       </button>
                     )}
-                    {task.relatedEntity === 'SPK' && (
+                    {(task.relatedEntity === 'SPK' || task.relatedEntity === 'Memo') && (
                       <button
-                        onClick={() => setActiveView('spk')}
+                        onClick={() => setActiveView('kontrak')}
                         className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-xs font-semibold transition-colors"
                       >
-                        Buka SPK
+                        Buka Kontrak
                       </button>
                     )}
 

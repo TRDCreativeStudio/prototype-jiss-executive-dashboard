@@ -79,7 +79,7 @@ export const PersonnelView: React.FC = () => {
             <tr className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
               <th className="px-5 py-3">NIP & Nama Lengkap</th>
               <th className="px-4 py-3">Jabatan</th>
-              <th className="px-4 py-3">Penempatan Wilayah & Pos Jaga</th>
+              <th className="px-4 py-3">Penempatan Wilayah & Lokasi Jaga</th>
               <th className="px-4 py-3">Status Karyawan</th>
               <th className="px-4 py-3">Ukuran Seragam / Sepatu</th>
               <th className="px-4 py-3">Status Tugas</th>

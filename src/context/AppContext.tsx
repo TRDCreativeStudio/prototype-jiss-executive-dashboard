@@ -32,6 +32,19 @@ import {
   INITIAL_AUDIT_LOGS 
 } from '../mockData';
 
+export interface ConfirmationDialogOptions {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  cancelLabel?: string;
+  variant?: 'primary' | 'danger' | 'warning' | 'success';
+  requiresNotes?: boolean;
+  notesLabel?: string;
+  notesPlaceholder?: string;
+  onConfirm: (notes?: string) => void;
+  onCancel?: () => void;
+}
+
 interface AppContextType {
   currentUser: UserAccount;
   users: UserAccount[];
@@ -50,7 +63,7 @@ interface AppContextType {
   auditLogs: AuditLogEntry[];
   
   activeView: string;
-  setActiveView: (view: string) => void;
+  setActiveView: (view: string, projectId?: string) => void;
   mobileMenuOpen: boolean;
   setMobileMenuOpen: (open: boolean) => void;
   selectedProjectId: string;
@@ -59,6 +72,11 @@ interface AppContextType {
   
   notification: { message: string; type: 'success' | 'warning' | 'error' | 'info' } | null;
   setNotification: (notif: { message: string; type: 'success' | 'warning' | 'error' | 'info' } | null) => void;
+
+  // Confirmation Dialog
+  confirmDialog: ConfirmationDialogOptions | null;
+  requestConfirmation: (options: ConfirmationDialogOptions) => void;
+  closeConfirmation: () => void;
   
   // Official Process Handlers
   submitDepartmentReview: (fpkId: string, dept: 'Operations' | 'Recruitment' | 'Procurement', review: any) => void;
@@ -71,13 +89,68 @@ interface AppContextType {
   completeTask: (taskId: string) => void;
   createFPK: (newFPK: Partial<FPK>) => void;
   assignGuardToSite: (personnelId: string, siteId: string) => void;
+
+  // Kontrak (SPK): integrasi tugas & notifikasi (F10)
+  createTask: (task: Omit<TaskItem, 'id' | 'createdDate' | 'status'>) => void;
+  closeTasksForEntity: (entityIds: string[]) => void;
+  notify: (message: string, type?: 'success' | 'warning' | 'error' | 'info') => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+const parseRouteFromLocation = (): { view: string; projectId: string } => {
+  if (typeof window === 'undefined') return { view: 'dashboard', projectId: 'proj-1' };
+  const path = window.location.pathname.replace(/\/+$/, '') || '/';
+  if (path === '/' || path === '/dashboard') return { view: 'dashboard', projectId: 'proj-1' };
+  if (path === '/klien' || path === '/clients') return { view: 'clients', projectId: 'proj-1' };
+  if (path === '/proyek' || path === '/projects') return { view: 'projects', projectId: 'proj-1' };
+  if (path.startsWith('/proyek/')) {
+    const rawCode = decodeURIComponent(path.replace('/proyek/', '')).trim();
+    const matched = INITIAL_PROJECTS.find(p => 
+      p.id.toLowerCase() === rawCode.toLowerCase() ||
+      p.projectCode.toLowerCase() === rawCode.toLowerCase() ||
+      p.projectCode.toLowerCase().replace(/[^a-z0-9]/g, '') === rawCode.toLowerCase().replace(/[^a-z0-9]/g, '') ||
+      p.name.toLowerCase().includes(rawCode.toLowerCase())
+    );
+    return { view: 'project-detail', projectId: matched ? matched.id : 'proj-1' };
+  }
+  if (path === '/kerja-sama-baru' || path === '/fpk') return { view: 'fpk', projectId: 'proj-1' };
+  // Penyatuan menu Kontrak (SPK): rute lama diarahkan ke /kontrak dengan filter tahap yang sesuai
+  if (path === '/kontrak') return { view: 'kontrak', projectId: 'proj-1' };
+  if (path === '/verifikasi-spk' || path === '/spk' || path === '/pemantauan-kontrak' || path === '/memos') {
+    const params = new URLSearchParams(window.location.search);
+    const legacyProyek = params.get('proyek');
+    const next = new URLSearchParams();
+    next.set('tahap', (path === '/verifikasi-spk' || path === '/spk') ? 'verifikasi' : 'perpanjangan');
+    if (legacyProyek) next.set('q', legacyProyek);
+    window.history.replaceState(null, '', `/kontrak?${next.toString()}`);
+    return { view: 'kontrak', projectId: 'proj-1' };
+  }
+  if (path === '/penempatan' || path === '/sites' || path === '/deployment') return { view: 'deployment', projectId: 'proj-1' };
+  if (path === '/petugas' || path === '/personel') return { view: 'personnel', projectId: 'proj-1' };
+  if (path === '/tugas' || path === '/tasks') return { view: 'tasks', projectId: 'proj-1' };
+  if (path === '/pengguna' || path === '/users') return { view: 'users', projectId: 'proj-1' };
+  if (path === '/audit') return { view: 'audit', projectId: 'proj-1' };
+  return { view: 'dashboard', projectId: 'proj-1' };
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Default to BOD (Bambang Sutrisno) or Marketing
-  const [currentUser, setCurrentUser] = useState<UserAccount>(INITIAL_USERS[0]);
+  // Load persistent user role from localStorage (P2: Peran tetap tersimpan setelah refresh)
+  const [currentUser, setCurrentUser] = useState<UserAccount>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const savedId = localStorage.getItem('jiss_current_user_id');
+        if (savedId) {
+          const found = INITIAL_USERS.find(u => u.id === savedId);
+          if (found) return found;
+        }
+      } catch (e) {
+        // Ignore localStorage error in private mode
+      }
+    }
+    return INITIAL_USERS[0]; // Default BOD
+  });
+
   const [users] = useState<UserAccount[]>(INITIAL_USERS);
   
   const [projects, setProjects] = useState<Project[]>(INITIAL_PROJECTS);
@@ -92,10 +165,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [mutations, setMutations] = useState<PersonnelMutation[]>(INITIAL_MUTATIONS);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(INITIAL_AUDIT_LOGS);
   
-  const [activeView, setActiveView] = useState<string>('dashboard');
+  // Initialize route from URL (P1: URL sendiri & Back/Refresh support)
+  const initialRoute = parseRouteFromLocation();
+  const [activeView, setActiveViewState] = useState<string>(initialRoute.view);
   const [mobileMenuOpen, setMobileMenuOpen] = useState<boolean>(false);
-  const [selectedProjectId, setSelectedProjectId] = useState<string>('proj-1');
+  const [selectedProjectId, setSelectedProjectIdState] = useState<string>(initialRoute.projectId);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'warning' | 'error' | 'info' } | null>(null);
+
+  // Confirmation Dialog State (P1: Dialog konfirmasi aksi penting)
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmationDialogOptions | null>(null);
+
+  const requestConfirmation = useCallback((options: ConfirmationDialogOptions) => {
+    setConfirmDialog(options);
+  }, []);
+
+  const closeConfirmation = useCallback(() => {
+    setConfirmDialog(null);
+  }, []);
 
   const triggerNotification = useCallback((message: string, type: 'success' | 'warning' | 'error' | 'info' = 'info') => {
     setNotification({ message, type });
@@ -121,10 +207,88 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const target = users.find((u) => u.id === userId);
     if (target) {
       setCurrentUser(target);
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('jiss_current_user_id', target.id);
+        } catch (e) {
+          // ignore
+        }
+      }
       triggerNotification(`Peran aktif: ${target.name} (${target.role})`, 'info');
       appendAuditLog('ROLE_SWITCH', `Beralih peran pengguna ke ${target.name} [${target.role}]`, 'INFO');
     }
   }, [users, triggerNotification, appendAuditLog]);
+
+  // URL synchronizer & scroll-to-top handler (P1: URL sendiri & P2: Scroll ke atas)
+  const syncBrowserUrl = useCallback((view: string, projectId: string) => {
+    if (typeof window === 'undefined') return;
+    let targetPath = '/dashboard';
+    switch (view) {
+      case 'dashboard': targetPath = '/dashboard'; break;
+      case 'clients': targetPath = '/klien'; break;
+      case 'projects': targetPath = '/proyek'; break;
+      case 'project-detail': {
+        const proj = projects.find(p => p.id === projectId);
+        const code = proj?.projectCode || projectId;
+        targetPath = `/proyek/${encodeURIComponent(code)}`;
+        break;
+      }
+      case 'fpk': targetPath = '/kerja-sama-baru'; break;
+      case 'spk':
+      case 'memos':
+      case 'kontrak': targetPath = '/kontrak'; break;
+      case 'deployment':
+      case 'sites': targetPath = '/penempatan'; break;
+      case 'personnel': targetPath = '/petugas'; break;
+      case 'tasks': targetPath = '/tugas'; break;
+      case 'users': targetPath = '/pengguna'; break;
+      case 'audit': targetPath = '/audit'; break;
+    }
+
+    if (window.location.pathname !== targetPath) {
+      window.history.pushState({ view, projectId }, '', targetPath);
+    }
+    // P2: Scroll to top on every navigation
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    const mainEl = document.querySelector('main');
+    if (mainEl) mainEl.scrollTo({ top: 0, behavior: 'instant' });
+  }, [projects]);
+
+  const setActiveView = useCallback((view: string, optProjectId?: string) => {
+    setActiveViewState(view === 'spk' || view === 'memos' ? 'kontrak' : view);
+    const pId = optProjectId || selectedProjectId;
+    if (optProjectId) {
+      setSelectedProjectIdState(optProjectId);
+    }
+    syncBrowserUrl(view, pId);
+  }, [selectedProjectId, syncBrowserUrl]);
+
+  const setSelectedProjectId = useCallback((id: string) => {
+    setSelectedProjectIdState(id);
+    if (activeView === 'project-detail') {
+      syncBrowserUrl('project-detail', id);
+    }
+  }, [activeView, syncBrowserUrl]);
+
+  // Popstate listener for Browser Back / Forward buttons (P1)
+  React.useEffect(() => {
+    const handlePopState = () => {
+      const parsed = parseRouteFromLocation();
+      setActiveViewState(parsed.view);
+      setSelectedProjectIdState(parsed.projectId);
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      const mainEl = document.querySelector('main');
+      if (mainEl) mainEl.scrollTo({ top: 0, behavior: 'instant' });
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Ensure current URL reflects initial path on mount
+  React.useEffect(() => {
+    syncBrowserUrl(activeView, selectedProjectId);
+  }, []);
 
   const selectedProject = useMemo(() => {
     return projects.find((p) => p.id === selectedProjectId) || projects[0];
@@ -443,6 +607,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     triggerNotification('Tugas berhasil diselesaikan!', 'success');
   }, [currentUser, appendAuditLog, triggerNotification]);
 
+  // Kontrak (SPK): buat tugas otomatis saat tahap berpindah ke pemilik baru
+  const createTask = useCallback((task: Omit<TaskItem, 'id' | 'createdDate' | 'status'>) => {
+    const newTask: TaskItem = {
+      ...task,
+      id: `task-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      createdDate: new Date().toISOString().slice(0, 10),
+      status: 'Open',
+    };
+    setTasks(prev => [newTask, ...prev]);
+  }, []);
+
+  // Kontrak (SPK): menyelesaikan aksi otomatis menutup tugas terkait
+  const closeTasksForEntity = useCallback((entityIds: string[]) => {
+    const ids = entityIds.filter(Boolean);
+    setTasks(prev => prev.map(t => (
+      t.status !== 'Completed' && (ids.includes(t.entityId) || ids.includes(t.entityReference))
+        ? { ...t, status: 'Completed' as const }
+        : t
+    )));
+  }, []);
+
   // Create new FPK
   const createFPK = useCallback((newFPKData: Partial<FPK>) => {
     const newId = `fpk-${Date.now()}`;
@@ -551,6 +736,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         selectedProject,
         notification,
         setNotification,
+        confirmDialog,
+        requestConfirmation,
+        closeConfirmation,
         submitDepartmentReview,
         submitFinanceAssessment,
         decideBOD,
@@ -561,6 +749,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         completeTask,
         createFPK,
         assignGuardToSite,
+        createTask,
+        closeTasksForEntity,
+        notify: triggerNotification,
       }}
     >
       {children}
