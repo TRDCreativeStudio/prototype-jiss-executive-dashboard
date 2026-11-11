@@ -7,15 +7,15 @@ import {
   FolderKanban, 
   FileText, 
   ScrollText, 
+  Mail, 
   Users2, 
   ShieldAlert, 
   CheckSquare, 
   ShieldCheck, 
   Database,
-  Shield,
-  X,
-  LogOut,
-  GitFork
+  Layers,
+  Flame,
+  X
 } from 'lucide-react';
 
 export const Sidebar: React.FC = () => {
@@ -26,9 +26,9 @@ export const Sidebar: React.FC = () => {
     setMobileMenuOpen, 
     fpks, 
     spks, 
+    projects, 
     tasks,
-    currentUser,
-    switchUser
+    currentUser
   } = useApp();
   const { myActionCount } = useContracts();
 
@@ -37,6 +37,10 @@ export const Sidebar: React.FC = () => {
     (currentUser.role === 'Finance' && fpks.some(f => f.status === 'Financial Review')) ||
     (['Operations', 'Recruitment', 'Procurement'].includes(currentUser.role) && fpks.some(f => f.status === 'Under Review'));
 
+  const pendingSPKVerifyCount = spks.filter(s => s.verificationStatus === 'Pending Verification').length;
+  const isSPKMyAction = currentUser.role === 'Finance' && pendingSPKVerifyCount > 0;
+
+  const expiringMemosCount = spks.filter(s => s.isExpiringSoon).length;
   const myOpenTasksCount = tasks.filter(t => t.assignedRole === currentUser.role && t.status !== 'Completed').length;
   const allOpenTasksCount = tasks.filter(t => t.status !== 'Completed').length;
 
@@ -49,40 +53,27 @@ export const Sidebar: React.FC = () => {
     const isActive = activeView === viewKey ||
       (viewKey === 'deployment' && activeView === 'sites') ||
       (viewKey === 'kontrak' && (activeView === 'spk' || activeView === 'memos'));
-    
-    return `w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs transition-all ${
+    return `w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-colors ${
       isActive
-        ? 'bg-[#FFDE00] text-zinc-950 font-bold shadow-xs'
-        : 'text-zinc-400 hover:text-white hover:bg-zinc-800/60 font-medium'
+        ? 'bg-slate-800 text-white font-semibold shadow-inner border border-slate-700'
+        : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800/50'
     }`;
   };
 
-  const iconClass = (viewKey: string) => {
-    const isActive = activeView === viewKey ||
-      (viewKey === 'deployment' && activeView === 'sites') ||
-      (viewKey === 'kontrak' && (activeView === 'spk' || activeView === 'memos'));
-    return `w-4 h-4 shrink-0 ${isActive ? 'text-zinc-950' : 'text-zinc-400'}`;
-  };
-
   const sidebarContent = (
-    <div className="flex flex-col h-full select-none bg-[#0B0C0E] text-zinc-300">
-      
-      {/* Brand Header: Logo Shield Crest + PT. JISS Indonesia */}
-      <div className="h-20 flex items-center justify-between px-5 border-b border-zinc-800/80 bg-[#0B0C0E] shrink-0">
+    <div className="flex flex-col h-full select-none">
+      {/* Brand Header */}
+      <div className="h-16 flex items-center justify-between px-5 border-b border-slate-800 bg-slate-950/60 shrink-0">
         <div className="flex items-center gap-3">
-          {/* Logo Badge: Golden Crest */}
-          <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-amber-500 via-[#FFDE00] to-yellow-300 p-0.5 shadow-md flex items-center justify-center shrink-0">
-            <div className="w-full h-full rounded-full bg-[#0B0C0E] flex items-center justify-center">
-              <Shield className="w-4 h-4 fill-[#FFDE00] text-[#FFDE00]" />
-            </div>
+          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-sm shadow">
+            <Layers className="w-4 h-4" />
           </div>
-
           <div>
-            <span className="font-bold text-sm tracking-tight text-white block leading-tight">
-              PT. JISS Indonesia
+            <span className="font-bold text-base tracking-tight text-white block leading-tight">
+              OPERASIONAL JISS
             </span>
-            <span className="text-[10px] text-zinc-400 tracking-wide font-medium block leading-tight mt-0.5">
-              Security Operation System
+            <span className="text-[10px] text-slate-400 uppercase tracking-wider font-medium">
+              Sistem Kendali Layanan
             </span>
           </div>
         </div>
@@ -90,7 +81,7 @@ export const Sidebar: React.FC = () => {
         {/* Mobile close button */}
         <button
           onClick={() => setMobileMenuOpen(false)}
-          className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 lg:hidden transition-colors"
+          className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 lg:hidden transition-colors"
           aria-label="Tutup menu navigasi"
         >
           <X className="w-5 h-5" />
@@ -98,41 +89,20 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* Navigation Sections */}
-      <div className="flex-1 overflow-y-auto px-3.5 py-5 space-y-6">
-        
-        {/* MAIN MENU */}
+      <div className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+        {/* UTAMA */}
         <div>
-          <div className="px-3 mb-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-            MAIN MENU
+          <div className="px-3 mb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+            Menu Utama
           </div>
           <div className="space-y-1">
             <button
               onClick={() => handleNavigate('dashboard')}
               className={navItemClass('dashboard')}
             >
-              <span className="flex items-center gap-3">
-                <LayoutDashboard className={iconClass('dashboard')} />
-                <span>Dashboard</span>
-              </span>
-            </button>
-
-            <button
-              onClick={() => handleNavigate('personnel')}
-              className={navItemClass('personnel')}
-            >
-              <span className="flex items-center gap-3">
-                <Users2 className={iconClass('personnel')} />
-                <span>Personnel Directory</span>
-              </span>
-            </button>
-
-            <button
-              onClick={() => handleNavigate('deployment')}
-              className={navItemClass('deployment')}
-            >
-              <span className="flex items-center gap-3">
-                <ShieldAlert className={iconClass('deployment')} />
-                <span>Deployments &amp; Sites</span>
+              <span className="flex items-center gap-2.5">
+                <LayoutDashboard className="w-4 h-4 text-slate-400" />
+                Dashboard Eksekutif
               </span>
             </button>
           </div>
@@ -140,17 +110,17 @@ export const Sidebar: React.FC = () => {
 
         {/* KOMERSIAL & KONTRAK */}
         <div>
-          <div className="px-3 mb-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-            KOMERSIAL &amp; KONTRAK
+          <div className="px-3 mb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+            Komersial & Kontrak
           </div>
           <div className="space-y-1">
             <button
               onClick={() => handleNavigate('clients')}
               className={navItemClass('clients')}
             >
-              <span className="flex items-center gap-3">
-                <Building2 className={iconClass('clients')} />
-                <span>Direktori Klien</span>
+              <span className="flex items-center gap-2.5">
+                <Building2 className="w-4 h-4 text-slate-400" />
+                Direktori Klien
               </span>
             </button>
 
@@ -158,9 +128,9 @@ export const Sidebar: React.FC = () => {
               onClick={() => handleNavigate('projects')}
               className={navItemClass('projects')}
             >
-              <span className="flex items-center gap-3">
-                <FolderKanban className={iconClass('projects')} />
-                <span>Daftar Proyek</span>
+              <span className="flex items-center gap-2.5">
+                <FolderKanban className="w-4 h-4 text-slate-400" />
+                Daftar Proyek
               </span>
             </button>
 
@@ -168,15 +138,15 @@ export const Sidebar: React.FC = () => {
               onClick={() => handleNavigate('fpk')}
               className={navItemClass('fpk')}
             >
-              <span className="flex items-center gap-3 text-left min-w-0">
-                <FileText className={iconClass('fpk')} />
+              <span className="flex items-center gap-2.5 text-left min-w-0">
+                <FileText className="w-4 h-4 text-slate-400 shrink-0" />
                 <span className="truncate">Kerja Sama Baru</span>
               </span>
               {pendingFPKCount > 0 && (
                 <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono shrink-0 ${
                   isFPKMyAction
                     ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold'
-                    : 'bg-zinc-800 text-zinc-400 border border-zinc-700/60 font-medium'
+                    : 'bg-slate-800 text-slate-400 border border-slate-700/60 font-medium'
                 }`}>
                   {pendingFPKCount}
                 </span>
@@ -187,9 +157,9 @@ export const Sidebar: React.FC = () => {
               onClick={() => handleNavigate('kontrak')}
               className={navItemClass('kontrak')}
             >
-              <span className="flex items-center gap-3">
-                <ScrollText className={iconClass('kontrak')} />
-                <span>Kontrak (SPK)</span>
+              <span className="flex items-center gap-2.5">
+                <ScrollText className="w-4 h-4 text-slate-400" />
+                Kontrak (SPK)
               </span>
               {myActionCount > 0 && (
                 <span className="text-[10px] px-1.5 py-0.2 rounded-full font-mono bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold">
@@ -200,25 +170,53 @@ export const Sidebar: React.FC = () => {
           </div>
         </div>
 
-        {/* RUANG KERJA & TUGAS */}
+        {/* OPERASIONAL LAPANGAN */}
         <div>
-          <div className="px-3 mb-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-            RUANG KERJA
+          <div className="px-3 mb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+            Operasional Lapangan
+          </div>
+          <div className="space-y-1">
+            <button
+              onClick={() => handleNavigate('deployment')}
+              className={navItemClass('deployment')}
+            >
+              <span className="flex items-center gap-2.5">
+                <ShieldAlert className="w-4 h-4 text-slate-400" />
+                Penempatan Petugas
+              </span>
+            </button>
+
+            <button
+              onClick={() => handleNavigate('personnel')}
+              className={navItemClass('personnel')}
+            >
+              <span className="flex items-center gap-2.5">
+                <Users2 className="w-4 h-4 text-slate-400" />
+                Data Petugas
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* RUANG KERJA */}
+        <div>
+          <div className="px-3 mb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+            Ruang Kerja
           </div>
           <div className="space-y-1">
             <button
               onClick={() => handleNavigate('tasks')}
               className={navItemClass('tasks')}
             >
-              <span className="flex items-center gap-3">
-                <CheckSquare className={iconClass('tasks')} />
-                <span>Tugas &amp; Persetujuan</span>
+              <span className="flex items-center gap-2.5">
+                <CheckSquare className="w-4 h-4 text-slate-400" />
+                Tugas & Persetujuan
               </span>
               {allOpenTasksCount > 0 && (
                 <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
                   myOpenTasksCount > 0
                     ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold'
-                    : 'bg-zinc-800 text-zinc-400 border border-zinc-700/60 font-medium'
+                    : 'bg-slate-800 text-slate-400 border border-slate-700/60 font-medium'
                 }`}>
                   {myOpenTasksCount > 0 ? myOpenTasksCount : allOpenTasksCount}
                 </span>
@@ -227,19 +225,19 @@ export const Sidebar: React.FC = () => {
           </div>
         </div>
 
-        {/* ADMINISTRATION */}
+        {/* PENGATURAN */}
         <div>
-          <div className="px-3 mb-2 text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
-            ADMINISTRATION
+          <div className="px-3 mb-1.5 text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
+            Pengaturan & Akses
           </div>
           <div className="space-y-1">
             <button
               onClick={() => handleNavigate('users')}
               className={navItemClass('users')}
             >
-              <span className="flex items-center gap-3">
-                <ShieldCheck className={iconClass('users')} />
-                <span>Pengguna &amp; Akses</span>
+              <span className="flex items-center gap-2.5">
+                <ShieldCheck className="w-4 h-4 text-slate-400" />
+                Pengguna & Hak Akses
               </span>
             </button>
 
@@ -247,47 +245,43 @@ export const Sidebar: React.FC = () => {
               onClick={() => handleNavigate('audit')}
               className={navItemClass('audit')}
             >
-              <span className="flex items-center gap-3">
-                <Database className={iconClass('audit')} />
-                <span>Data Induk &amp; Riwayat</span>
+              <span className="flex items-center gap-2.5">
+                <Database className="w-4 h-4 text-slate-400" />
+                Data Induk & Riwayat
               </span>
             </button>
           </div>
         </div>
-
       </div>
 
-      {/* Log Out Bottom Action */}
-      <div className="p-4 border-t border-zinc-800/80 bg-[#0B0C0E] shrink-0">
-        <button
-          onClick={() => switchUser(currentUser.id === 'usr-1' ? 'usr-2' : 'usr-1')}
-          className="flex items-center gap-2.5 text-xs text-zinc-400 hover:text-white transition-colors w-full px-2 py-1.5 rounded-lg hover:bg-zinc-800/50"
-          title="Keluar atau Ganti Akun"
-        >
-          <LogOut className="w-4 h-4 text-zinc-400" />
-          <span>Log Out</span>
-        </button>
+      {/* System Status Footnote */}
+      <div className="p-3 border-t border-slate-800 bg-slate-950/40 text-[11px] text-slate-400 shrink-0">
+        <div className="text-[10px] text-slate-400 leading-relaxed">
+          <span className="text-indigo-400 font-semibold">Alur Layanan:</span> Pengajuan → Penelaahan → Pelaksanaan → Verifikasi Kontrak
+        </div>
       </div>
-
     </div>
   );
 
   return (
     <>
       {/* Desktop Fixed Sidebar */}
-      <aside className="hidden lg:flex w-64 bg-[#0B0C0E] text-zinc-300 flex-col border-r border-zinc-800/80 shrink-0 h-screen sticky top-0 z-30">
+      <aside className="hidden lg:flex w-64 bg-slate-900 text-slate-300 flex-col border-r border-slate-800 shrink-0 h-screen sticky top-0">
         {sidebarContent}
       </aside>
 
       {/* Mobile Drawer Overlay */}
       {mobileMenuOpen && (
         <div className="fixed inset-0 z-50 lg:hidden">
+          {/* Backdrop */}
           <div 
-            className="fixed inset-0 bg-black/70 backdrop-blur-xs transition-opacity duration-300"
+            className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs transition-opacity duration-300"
             onClick={() => setMobileMenuOpen(false)}
             aria-hidden="true"
           />
-          <aside className="fixed inset-y-0 left-0 w-72 bg-[#0B0C0E] text-zinc-300 flex flex-col border-r border-zinc-800 shadow-2xl z-50 animate-in slide-in-from-left duration-200">
+
+          {/* Drawer Sheet */}
+          <aside className="fixed inset-y-0 left-0 w-72 bg-slate-900 text-slate-300 flex flex-col border-r border-slate-800 shadow-2xl z-50 animate-in slide-in-from-left duration-200">
             {sidebarContent}
           </aside>
         </div>

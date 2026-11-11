@@ -179,7 +179,7 @@ const MainLayout: React.FC = () => {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#F4F5F7] text-zinc-900 font-sans selection:bg-[#FFDE00] selection:text-black">
+    <div className="flex min-h-screen bg-slate-50 text-slate-900 font-sans selection:bg-slate-900 selection:text-white">
       {/* Dark Sidebar */}
       <Sidebar />
 
