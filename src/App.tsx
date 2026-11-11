@@ -186,7 +186,11 @@ const MainLayout: React.FC = () => {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         <Header />
-        <main className="flex-1 overflow-y-auto pb-12">
+        <main className={`flex-1 min-w-0 ${
+          ['kontrak', 'spk', 'memos'].includes(activeView)
+            ? 'overflow-hidden flex flex-col'
+            : 'overflow-y-auto pb-12'
+        }`}>
           {renderCurrentView()}
         </main>
       </div>
