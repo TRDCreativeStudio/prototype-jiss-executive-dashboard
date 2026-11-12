@@ -148,6 +148,7 @@ export interface FpkLine {
   positionId: string;
   qty: number;
   shift: Shift;
+  notes?: string;
   sources: FpkLineSource[];
 }
 

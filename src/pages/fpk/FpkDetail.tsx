@@ -145,7 +145,10 @@ export const FpkDetailPage: React.FC<{ id: string }> = ({ id }) => {
                 const c = cov.lines.find(x => x.line.id === l.id);
                 return (
                   <tr key={l.id}>
-                    <Td className="font-medium">{lookups.position.get(l.positionId)?.name}</Td>
+                    <Td>
+                      <div className="font-medium text-slate-800">{lookups.position.get(l.positionId)?.name}</div>
+                      {l.notes && <div className="text-xs text-slate-500 font-normal mt-0.5">Catatan: {l.notes}</div>}
+                    </Td>
                     <Td className="tabular-nums">{l.qty}</Td>
                     <Td>{l.shift}</Td>
                     <Td className="text-xs">

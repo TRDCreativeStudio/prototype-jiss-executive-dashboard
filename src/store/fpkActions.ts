@@ -24,9 +24,9 @@ export interface FpkInput {
   newSite?: { code: string; name: string; address: string; areaId: string };
   periodStart: string;
   periodEnd: string;
-  plannedStart: string;
+  plannedStart?: string;
   monthlyValue: number;
-  lines: { id?: string; positionId: string; qty: number; shift: Shift }[];
+  lines: { id?: string; positionId: string; qty: number; shift: Shift; notes?: string }[];
   attachments: { kind: 'BOQ' | 'Bukti deal'; fileName: string }[];
 }
 
@@ -115,11 +115,11 @@ const buildVersion = (tx: Tx, input: FpkInput, no: number, clientId: string, sit
   siteId,
   periodStart: input.periodStart,
   periodEnd: input.periodEnd,
-  plannedStart: input.plannedStart,
+  plannedStart: input.plannedStart || input.periodStart,
   monthlyValue: input.monthlyValue,
   lines: input.lines.map(l => {
     const old = prev?.lines.find(x => x.id === l.id && x.positionId === l.positionId && x.qty === l.qty && x.shift === l.shift);
-    return { id: tx.id('fl'), positionId: l.positionId, qty: l.qty, shift: l.shift, sources: old?.sources ?? [] };
+    return { id: tx.id('fl'), positionId: l.positionId, qty: l.qty, shift: l.shift, notes: l.notes, sources: old?.sources ?? [] };
   }),
   attachments: input.attachments.map(a => ({
     id: tx.id('at'), kind: a.kind, fileName: a.fileName, priced: isPricedKind(a.kind), uploadedBy: tx.me.id, uploadedAt: NOW,
@@ -134,7 +134,7 @@ const validateInput = (tx: Tx, input: FpkInput): string | null => {
   if (!input.siteId && !input.newSite) return 'Pilih site atau buat site baru.';
   if (input.newSite && (!input.newSite.code || !input.newSite.name || !input.newSite.address || !input.newSite.areaId)) return 'Site baru: kode, nama, alamat, dan area wajib diisi.';
   if (input.type !== 'baru' && !input.parentFpkId) return 'FPK perubahan/perpanjangan wajib memilih FPK induk.';
-  if (!input.periodStart || !input.periodEnd || !input.plannedStart) return 'Periode dan tanggal mulai rencana wajib diisi.';
+  if (!input.periodStart || !input.periodEnd) return 'Periode mulai dan selesai wajib diisi.';
   if (diffDays(input.periodStart, input.periodEnd) <= 0) return 'Periode selesai harus setelah periode mulai.';
   if (!(input.monthlyValue > 0)) return 'Nilai per bulan wajib diisi.';
   if (!input.lines.length || input.lines.some(l => !l.positionId || !(l.qty > 0))) return 'Isi minimal satu baris jabatan dengan jumlah lebih dari 0.';
