@@ -5,7 +5,8 @@ import {
   DollarSign, Users, MapPin, Undo2, Shield
 } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { AttachmentChip, Badge, Btn, Money, cx } from '../../ui/kit';
+import { ActivityLog, AttachmentChip, Badge, Btn, Money, cx } from '../../ui/kit';
+import { fpkActivity, spkActivity } from '../../domain/activity';
 import { navigate, Link } from '../../router';
 import { FPK_STATUS, FPK_TYPE, SPK_STATUS, SPK_TYPE } from '../../domain/labels';
 import { fpkCoverage, fpkHeadcount, latest, spkHeadcount } from '../../domain/selectors';
@@ -20,6 +21,8 @@ export interface ActiveDoc {
 
 interface ProjectDocDrawerProps {
   activeDoc: ActiveDoc;
+  /** true saat animasi geser keluar sedang berjalan */
+  closing?: boolean;
   onClose: () => void;
   onNavigateDoc: (doc: ActiveDoc) => void;
   onBackDoc?: () => void;
@@ -29,6 +32,7 @@ interface ProjectDocDrawerProps {
 
 export const ProjectDocDrawer: React.FC<ProjectDocDrawerProps> = ({
   activeDoc,
+  closing = false,
   onClose,
   onNavigateDoc,
   onBackDoc,
@@ -88,7 +92,7 @@ export const ProjectDocDrawer: React.FC<ProjectDocDrawerProps> = ({
         : 'bg-slate-400';
 
     return (
-      <div className="fixed inset-y-0 right-0 z-40 w-full md:w-[560px] bg-white shadow-2xl border-l border-slate-200 flex flex-col h-full animate-in slide-in-from-right duration-200">
+      <div className="drawer-panel fixed inset-y-0 right-0 z-40 w-full md:w-[560px] bg-white shadow-2xl border-l border-slate-200 flex flex-col h-full" data-closing={closing}>
         {/* Header Drawer */}
         <div className="px-5 py-4 border-b border-slate-200 bg-white sticky top-0 z-10 space-y-2">
           {/* Top Bar: Back history (if navigated from another doc) + Close */}
@@ -107,15 +111,6 @@ export const ProjectDocDrawer: React.FC<ProjectDocDrawerProps> = ({
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => navigate(`/fpk/${f.id}`)}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:text-indigo-900 hover:bg-indigo-50 rounded-lg transition-colors border border-indigo-200"
-                title="Buka halaman penuh"
-              >
-                <span>Buka detail</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </button>
               <button
                 type="button"
                 onClick={onClose}
@@ -316,48 +311,12 @@ export const ProjectDocDrawer: React.FC<ProjectDocDrawerProps> = ({
             </div>
           )}
 
-          {/* 6. Aktivitas & Riwayat Persetujuan */}
+          {/* 6. Log aktivitas FPK */}
           <div className="border border-slate-200 rounded-xl p-4 space-y-3 bg-white">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
-              Aktivitas &amp; Cek Divisi
+              Log aktivitas
             </span>
-            <div className="space-y-3 text-xs">
-              {/* Dibuat */}
-              <div className="flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-semibold text-slate-800">FPK dibuat</span>
-                  <div className="text-slate-500 text-[11px]">
-                    Oleh {lookups.user.get(f.createdBy)?.name} · {fmtDateTime(f.createdAt)}
-                  </div>
-                </div>
-              </div>
-
-              {/* Verifikasi 4 Divisi */}
-              {f.reviews && Object.entries(f.reviews).map(([div, r]) => {
-                const isApproved = r.result === 'cocok' || r.result === 'selesai';
-                const isRejected = r.result === 'tidak_layak';
-                const isChanges = r.result === 'ada_perubahan' || r.result === 'kembalikan';
-                const iconColor = isApproved ? 'text-emerald-600' : isRejected ? 'text-rose-600' : isChanges ? 'text-amber-500' : 'text-slate-400';
-
-                return (
-                  <div key={div} className="flex items-start gap-2.5">
-                    <CheckCircle2 className={cx('w-4 h-4 shrink-0 mt-0.5', iconColor)} />
-                    <div>
-                      <div className="font-medium text-slate-800">
-                        {div}: <span className="font-semibold capitalize">{r.result === 'cocok' ? 'Disetujui' : r.result.replace(/_/g, ' ')}</span>
-                      </div>
-                      {r.note && (
-                        <div className="text-[11px] text-slate-600 mt-0.5 italic">"{r.note}"</div>
-                      )}
-                      <div className="text-slate-400 text-[10px] mt-0.5">
-                        Oleh {lookups.user.get(r.actorId)?.name} · {fmtDateTime(r.at)}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-
+            <ActivityLog items={fpkActivity(f, state.spks, state.audit, access.money(v.clientId))} />
               {/* Versi sebelumnya */}
               {f.versions.length > 1 && (
                 <div className="pt-2 border-t border-slate-100">
@@ -381,8 +340,14 @@ export const ProjectDocDrawer: React.FC<ProjectDocDrawerProps> = ({
                   </div>
                 </div>
               )}
-            </div>
           </div>
+        </div>
+
+        {/* Footer: satu aksi, buka halaman penuh */}
+        <div className="p-4 border-t border-slate-200 bg-slate-50/70 flex justify-end">
+          <Btn size="sm" icon={<ExternalLink className="w-3.5 h-3.5" />} onClick={() => navigate(`/fpk/${f.id}`)}>
+            Buka Halaman Penuh
+          </Btn>
         </div>
       </div>
     );
@@ -411,7 +376,7 @@ export const ProjectDocDrawer: React.FC<ProjectDocDrawerProps> = ({
         : 'bg-slate-400';
 
     return (
-      <div className="fixed inset-y-0 right-0 z-40 w-full md:w-[560px] bg-white shadow-2xl border-l border-slate-200 flex flex-col h-full animate-in slide-in-from-right duration-200">
+      <div className="drawer-panel fixed inset-y-0 right-0 z-40 w-full md:w-[560px] bg-white shadow-2xl border-l border-slate-200 flex flex-col h-full" data-closing={closing}>
         {/* Header Drawer */}
         <div className="px-5 py-4 border-b border-slate-200 bg-white sticky top-0 z-10 space-y-2">
           {/* Top Bar: Back history + Close */}
@@ -430,15 +395,6 @@ export const ProjectDocDrawer: React.FC<ProjectDocDrawerProps> = ({
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={() => navigate(`/spk/${s.id}`)}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-700 hover:text-indigo-900 hover:bg-indigo-50 rounded-lg transition-colors border border-indigo-200"
-                title="Buka halaman penuh"
-              >
-                <span>Buka detail</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </button>
               <button
                 type="button"
                 onClick={onClose}
@@ -633,40 +589,20 @@ export const ProjectDocDrawer: React.FC<ProjectDocDrawerProps> = ({
             </div>
           )}
 
-          {/* 6. Aktivitas SPK */}
+          {/* 6. Log aktivitas SPK */}
           <div className="border border-slate-200 rounded-xl p-4 space-y-3 bg-white">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
-              Aktivitas SPK
+              Log aktivitas
             </span>
-            <div className="space-y-3 text-xs">
-              <div className="flex items-start gap-2.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-semibold text-slate-800">SPK diinput</span>
-                  <div className="text-slate-500 text-[11px]">
-                    Oleh {lookups.user.get(s.inputBy)?.name} · {fmtDateTime(s.inputAt)}
-                  </div>
-                </div>
-              </div>
-
-              {s.verifiedAt && (
-                <div className="flex items-start gap-2.5">
-                  <CheckCircle2 className={cx('w-4 h-4 shrink-0 mt-0.5', s.verdict === 'salah' ? 'text-amber-500' : 'text-emerald-600')} />
-                  <div>
-                    <div className="font-semibold text-slate-800">
-                      Verifikasi Finance: <span className="capitalize">{s.verdict ?? 'Selesai'}</span>
-                    </div>
-                    {s.revisionReason && (
-                      <div className="text-[11px] text-slate-600 mt-0.5 italic">"{s.revisionReason}"</div>
-                    )}
-                    <div className="text-slate-400 text-[10px] mt-0.5">
-                      Oleh {lookups.user.get(s.verifiedBy ?? '')?.name} · {fmtDateTime(s.verifiedAt)}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+            <ActivityLog items={spkActivity(s).sort((a, b) => b.at.localeCompare(a.at))} />
           </div>
+        </div>
+
+        {/* Footer: satu aksi, buka halaman penuh */}
+        <div className="p-4 border-t border-slate-200 bg-slate-50/70 flex justify-end">
+          <Btn size="sm" icon={<ExternalLink className="w-3.5 h-3.5" />} onClick={() => navigate(`/spk/${s.id}`)}>
+            Buka Halaman Penuh
+          </Btn>
         </div>
       </div>
     );

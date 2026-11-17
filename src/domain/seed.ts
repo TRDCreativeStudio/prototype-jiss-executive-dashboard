@@ -1,7 +1,7 @@
 // Data contoh prototipe. SEMUA FIKTIF: nama orang, klien, site, nomor dokumen, dan nilai uang dibuat-buat.
 import type {
   Area, AuditEntry, Client, Delegation, Fpk, Holiday, Memo, Notification, Personnel,
-  PersonnelStatus, Position, Site, SiteAssignment, Spk, Task, User, Attachment,
+  PersonnelStatus, Position, Site, SiteAssignment, Spk, SpkDraft, Task, User, Attachment,
 } from './types';
 import { DEFAULT_SETTINGS } from './settings';
 
@@ -500,4 +500,16 @@ export const SEED_AUDIT: AuditEntry[] = [
   { id: 'au-3', at: '2026-11-05 16:00', actorId: 'u-fin1', entity: 'fpk', entityId: 'f-0012', action: 'Cek margin selesai', after: 'Estimasi biaya Rp 128.100.000, margin 8,5%', hasMoney: true },
   { id: 'au-4', at: '2026-11-11 10:05', actorId: 'u-mkt1', entity: 'spk', entityId: 'sp-3', action: 'SPK diinput' },
   { id: 'au-5', at: '2026-11-11 15:00', actorId: 'u-ops2', entity: 'fpk', entityId: 'f-0013', action: 'Cek Operasional: cocok' },
+];
+
+/** Contoh draft SPK milik Sari Melati: Gudang Pulogadung, FPK sudah disetujui, isian belum lengkap. */
+export const SEED_SPK_DRAFTS: SpkDraft[] = [
+  {
+    id: 'sd-1', createdBy: 'u-mkt1', updatedAt: '2026-11-11',
+    input: {
+      number: 'SPK/SPL/2026/031', type: 'baru', fpkId: 'f-0007', siteId: 's-spl-pgd',
+      periodStart: '2026-11-12', periodEnd: '', monthlyValue: 0,
+      lines: [{ positionId: '', qty: 1, shift: 'Pagi' }], pdfName: '',
+    },
+  },
 ];

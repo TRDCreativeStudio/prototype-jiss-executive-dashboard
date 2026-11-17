@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { Btn, Card, Input, PageHeader, Table, Td, runAction, ErrorText, DateInput } from '../../ui/kit';
+import { Btn, Card, Input, PageHeader, Table, Td, runAction, ErrorText, DateInput, Tr, CellCode, CellSub } from '../../ui/kit';
 import { addWorkdays, fmtDate, TODAY } from '../../domain/time';
 
 const SettingRow: React.FC<{ k: string; value: string; usedIn: string; desc: string; editable: boolean }> = ({ k, value, usedIn, desc, editable }) => {
@@ -9,10 +9,10 @@ const SettingRow: React.FC<{ k: string; value: string; usedIn: string; desc: str
   const [v, setV] = useState(value);
   const dirty = v !== value;
   return (
-    <tr>
+    <Tr>
       <Td>
-        <div className="font-mono text-xs text-slate-800">{k}</div>
-        <div className="text-xs text-slate-500">{desc}</div>
+        <CellCode>{k}</CellCode>
+        <CellSub>{desc}</CellSub>
       </Td>
       <Td>
         {editable ? (
@@ -22,8 +22,8 @@ const SettingRow: React.FC<{ k: string; value: string; usedIn: string; desc: str
           </div>
         ) : <span className="font-semibold">{value}</span>}
       </Td>
-      <Td className="text-xs text-slate-500">{usedIn}</Td>
-    </tr>
+      <Td className="text-slate-500">{usedIn}</Td>
+    </Tr>
   );
 };
 
@@ -47,11 +47,11 @@ export const SettingsPage: React.FC = () => {
         <div className="border border-slate-200 rounded-lg overflow-hidden">
           <Table head={['Tanggal', 'Keterangan', '']}>
             {state.holidays.map(x => (
-              <tr key={x.date}>
+              <Tr key={x.date}>
                 <Td className="whitespace-nowrap">{fmtDate(x.date)}</Td>
                 <Td>{x.description}</Td>
                 <Td>{editable && <Btn size="sm" variant="ghost" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => runAction(actions.removeHoliday(x.date), 'Libur dihapus')}>Hapus</Btn>}</Td>
-              </tr>
+              </Tr>
             ))}
           </Table>
           {editable && (

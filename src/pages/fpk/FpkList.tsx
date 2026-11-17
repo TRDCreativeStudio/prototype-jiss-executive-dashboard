@@ -1,7 +1,9 @@
+import type { Tone } from '../../domain/labels';
 import React, { useState, useEffect } from 'react';
 import { Plus, Download, AlertTriangle, X, ExternalLink, MapPin, Paperclip, Undo2, Pencil, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { Badge, Btn, Card, Money, PageHeader, SearchBox, Select, Table, Tabs, Td, ExportBtn, exportCsv, cx } from '../../ui/kit';
+import { Badge, Btn, Card, Money, PageHeader, SearchBox, Select, Table, Tabs, Td, ExportBtn, exportCsv, cx, useAnimatedClose, StatusChip, ActivityLog, type StatusHint, Tr, TableEmpty } from '../../ui/kit';
+import { fpkActivity } from '../../domain/activity';
 import { Link, navigate } from '../../router';
 import { FPK_STATUS, FPK_TYPE } from '../../domain/labels';
 import { fpkCoverage, fpkHeadcount, latest } from '../../domain/selectors';
@@ -49,16 +51,17 @@ export const CheckChips: React.FC<{ f: Fpk; labeled?: boolean }> = ({ f, labeled
 
 /** Side Panel (Drawer) 40% untuk quick preview FPK sebelum masuk ke detail page */
 export const FpkSidePanel: React.FC<{ fpkId: string; onClose: () => void }> = ({ fpkId, onClose }) => {
+  const { closing, close } = useAnimatedClose(onClose);
   const { state, lookups, access, me } = useStore();
   const f = lookups.fpk.get(fpkId);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') close();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [close]);
 
   if (!f) return null;
   const v = latest(f);
@@ -72,13 +75,14 @@ export const FpkSidePanel: React.FC<{ fpkId: string; onClose: () => void }> = ({
     <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true">
       {/* Backdrop without blur */}
       <div
-        className="fixed inset-0 bg-slate-900/20 transition-opacity"
-        onClick={onClose}
+        className="drawer-backdrop fixed inset-0 bg-slate-900/20"
+        data-closing={closing}
+        onClick={close}
       />
 
       <div className="fixed inset-y-0 right-0 flex max-w-full">
         {/* Panel 40% (Mobile/Tablet fallback to full/max-w-lg) */}
-        <div className="w-screen sm:w-[520px] lg:w-[40vw] xl:w-[40vw] bg-white shadow-2xl border-l border-slate-200 flex flex-col z-10">
+        <div className="drawer-panel w-screen sm:w-[520px] lg:w-[40vw] xl:w-[40vw] bg-white shadow-2xl border-l border-slate-200 flex flex-col z-10" data-closing={closing}>
           
           {/* Header Panel */}
           <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3 bg-white sticky top-0 z-10">
@@ -100,16 +104,7 @@ export const FpkSidePanel: React.FC<{ fpkId: string; onClose: () => void }> = ({
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
-                onClick={() => navigate(`/fpk/${f.id}`)}
-                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-indigo-700 hover:text-indigo-900 hover:bg-indigo-50 rounded-lg transition-colors border border-indigo-200"
-                title="Buka halaman penuh"
-              >
-                <span>Buka detail</span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
+                onClick={close}
                 className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
                 aria-label="Tutup panel"
               >
@@ -262,6 +257,12 @@ export const FpkSidePanel: React.FC<{ fpkId: string; onClose: () => void }> = ({
                 </div>
               </div>
             )}
+
+            {/* Section 6: Log aktivitas FPK (paling bawah) */}
+            <div className="border border-slate-200 rounded-xl p-4 space-y-3">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Log aktivitas</div>
+              <ActivityLog items={fpkActivity(f, state.spks, state.audit, access.money(v.clientId))} />
+            </div>
           </div>
 
           {/* Footer Panel */}
@@ -279,9 +280,6 @@ export const FpkSidePanel: React.FC<{ fpkId: string; onClose: () => void }> = ({
               )}
             </div>
             <div className="flex items-center gap-2">
-              <Btn size="sm" variant="secondary" onClick={onClose}>
-                Tutup
-              </Btn>
               <Btn
                 size="sm"
                 variant="primary"
@@ -322,13 +320,15 @@ interface FpkStatusDisplay {
   label: string;
   line2: string;
   dotClass: string;
+  tone: Tone;
+  hint: StatusHint | null;
   isRed: boolean;
   isMyTurn: boolean;
   reviewTooltip: string;
   targetDate: string;
 }
 
-const getFpkStatusDisplay = (
+export const getFpkStatusDisplay = (
   f: Fpk,
   state: { tasks: Task[]; spks: Spk[]; settings: Setting[]; holidays: Holiday[]; clients: Client[] },
   lookups: { client: { get: (id: string) => Client | undefined }; site: { get: (id: string) => Site | undefined }; user: { get: (id: string) => User | undefined } },
@@ -389,40 +389,51 @@ const getFpkStatusDisplay = (
         return `${shortName} –`;
       }).join(' · ');
 
-  // Compute Label & Line 2 (baris 2 hanya bila menambah informasi)
+  // Label chip + ikon info (tooltip). Tidak ada baris kedua di tabel.
   let label = FPK_STATUS[f.status].label;
   let line2 = '';
+  let hint: StatusHint | null = null;
   const targetDate = earliestDueAt ?? f.startedAt ?? v.plannedStart ?? f.createdAt;
+  const daysLate = earliestDueAt ? diffDays(earliestDueAt, today) : 0;
+  const dueText = (who: string) => daysLate > 0
+    ? { kind: 'danger' as const, text: `Lewat ${daysLate} hari · ${who} belum cek` }
+    : { kind: 'info' as const, text: `Menunggu ${who} · batas ${fmtDueText(earliestDueAt, today)}` };
 
   switch (f.status) {
     case 'draf':
       label = 'Draf';
-      line2 = '';
       break;
 
     case 'cek_divisi': {
       label = 'Cek divisi';
-      const pendingNames = f.pendingDivisions.map(d => (d === 'Operasional' ? 'Ops' : d)).join(', ') || 'Divisi';
-      const dueStr = fmtDueText(earliestDueAt, today);
-      line2 = `${pendingNames} · ${dueStr}`;
+      const pendingNames = f.pendingDivisions.map(d => (d === 'Operasional' ? 'Ops' : d)).join(', ') || 'divisi';
+      line2 = `${pendingNames} · ${fmtDueText(earliestDueAt, today)}`;
+      hint = dueText(pendingNames);
       break;
     }
 
     case 'cek_margin': {
       label = 'Cek margin';
-      const dueStr = fmtDueText(earliestDueAt, today);
-      line2 = `Finance · ${dueStr}`;
+      line2 = `Finance · ${fmtDueText(earliestDueAt, today)}`;
+      hint = dueText('Finance');
       break;
     }
 
     case 'menunggu_bod': {
       label = 'Menunggu BOD';
-      if (isUnfit) {
+      // Peringatan kelayakan/margin hanya relevan untuk yang memutuskan (BOD) dan Finance.
+      // Marketing cukup tahu FPK sedang di BOD.
+      const decider = me.roles.includes('BOD') || me.roles.includes('Finance');
+      if (!decider) {
+        // tanpa ikon
+      } else if (isUnfit) {
         line2 = 'Tidak layak';
+        hint = { kind: 'danger', text: 'Ditandai tidak layak oleh Finance' };
       } else if (isLowMargin) {
         line2 = `Margin ${v.estMarginPct ?? 0}%`;
-      } else {
-        line2 = '';
+        hint = { kind: 'danger', text: `Margin ${v.estMarginPct ?? 0}%, di bawah minimum ${minMargin}%` };
+      } else if (daysLate > 0) {
+        hint = { kind: 'danger', text: `Lewat ${daysLate} hari · BOD belum memutuskan` };
       }
       break;
     }
@@ -431,37 +442,43 @@ const getFpkStatusDisplay = (
       label = 'Dikembalikan';
       const retDiv = f.returned?.fromDivision === 'Operasional' ? 'Ops' : (f.returned?.fromDivision ?? 'Divisi');
       const rawReason = f.returned?.reason ?? 'Perlu perbaikan';
-      const shortReason = rawReason.length > 30 ? `${rawReason.slice(0, 30)}…` : rawReason;
-      line2 = `${retDiv}: ${shortReason}`;
+      line2 = `${retDiv}: ${rawReason.length > 30 ? `${rawReason.slice(0, 30)}…` : rawReason}`;
+      hint = { kind: 'info', text: `${retDiv}: ${rawReason}` };
       break;
     }
 
-    case 'disetujui': {
+    case 'disetujui':
       label = 'Disetujui';
-      line2 = '';
       break;
-    }
 
     case 'berjalan':
     case 'tertutup_sebagian': {
       label = 'Berjalan';
+      const spkPending = state.spks.some(x => x.fpkId === f.id && x.status === 'diinput');
+      const pendingNote = spkPending ? ' · SPK menunggu verifikasi Finance' : '';
       if (cov.done === 0) {
         line2 = `Tanpa SPK · ${daysRunning} hari`;
+        hint = {
+          kind: isSpkOverdue ? 'danger' : 'warn',
+          text: `Berjalan tanpa SPK · ${daysRunning} hari${isSpkOverdue ? ' · lewat batas kejar SPK' : ''}${pendingNote}`,
+        };
       } else {
         line2 = `SPK ${cov.done}/${cov.total}`;
+        hint = { kind: 'warn', text: `SPK belum lengkap · ${cov.done} dari ${cov.total} personel${pendingNote}` };
       }
       break;
     }
 
     case 'selesai':
-      label = 'Selesai';
-      line2 = '';
+      // SPK sudah menutup seluruh kuota: dari sisi pengguna, proyek cukup "Berjalan"
+      label = 'Berjalan';
       break;
 
     case 'ditolak': {
       label = 'Ditolak';
       const note = f.bodDecision?.note || f.cancelled?.reason || 'Ditolak';
       line2 = note.length > 30 ? `${note.slice(0, 30)}…` : note;
+      hint = { kind: 'info', text: note };
       break;
     }
 
@@ -469,6 +486,7 @@ const getFpkStatusDisplay = (
       label = 'Batal';
       const note = f.cancelled?.reason || 'Dibatalkan';
       line2 = note.length > 30 ? `${note.slice(0, 30)}…` : note;
+      hint = { kind: 'info', text: note };
       break;
     }
   }
@@ -489,10 +507,20 @@ const getFpkStatusDisplay = (
     dotClass = 'bg-slate-400';
   }
 
+  // Warna chip mengikuti status saja; peringatan (lewat batas, tidak layak) tampil merah di baris kedua
+  const tone: Tone =
+    ['cek_divisi', 'cek_margin', 'menunggu_bod'].includes(f.status) ? 'blue'
+    : f.status === 'dikembalikan' ? 'amber'
+    : ['disetujui', 'berjalan', 'tertutup_sebagian', 'selesai'].includes(f.status) ? 'green'
+    : ['ditolak', 'batal'].includes(f.status) ? 'red'
+    : 'slate';
+
   return {
     label,
     line2,
     dotClass,
+    tone,
+    hint,
     isRed,
     isMyTurn,
     reviewTooltip,
@@ -500,7 +528,7 @@ const getFpkStatusDisplay = (
   };
 };
 
-type SortCol = 'default' | 'fpk' | 'status' | 'start' | 'headcount' | 'value';
+type SortCol = 'default' | 'nomor' | 'fpk' | 'site' | 'status' | 'start' | 'headcount' | 'value';
 
 export const FpkListPage: React.FC = () => {
   const { state, lookups, access, myTasks, me } = useStore();
@@ -535,6 +563,14 @@ export const FpkListPage: React.FC = () => {
   }));
 
   const sortedRows = [...preparedRows].sort((a, b) => {
+    if (sortCol === 'nomor') {
+      const res = a.f.number.localeCompare(b.f.number);
+      return sortDir === 'asc' ? res : -res;
+    }
+    if (sortCol === 'site') {
+      const res = (lookups.site.get(latest(a.f).siteId)?.name ?? '').localeCompare(lookups.site.get(latest(b.f).siteId)?.name ?? '');
+      return sortDir === 'asc' ? res : -res;
+    }
     if (sortCol === 'fpk') {
       const nameA = lookups.client.get(latest(a.f).clientId)?.name ?? '';
       const nameB = lookups.client.get(latest(b.f).clientId)?.name ?? '';
@@ -616,17 +652,17 @@ export const FpkListPage: React.FC = () => {
             variant="secondary"
             icon={<Download className="w-3.5 h-3.5" />}
             onClick={() => exportCsv('fpk.csv', [
-              ['Klien', 'Site', 'Area', 'Nomor', 'Jenis', 'Status', 'Keterangan', 'Mulai', 'Orang', 'Nilai/Bulan'],
+              ['No. FPK', 'Klien', 'Site', 'Area', 'Jenis', 'Status', 'Keterangan', 'Mulai', 'Orang', 'Nilai/Bulan'],
               ...sortedRows.map(({ f, statusDisplay }) => {
                 const v = latest(f);
                 return [
+                  f.number,
                   lookups.client.get(v.clientId)?.name ?? '',
                   lookups.site.get(v.siteId)?.name ?? '',
                   lookups.site.get(v.siteId)?.areaId ? (lookups.area.get(lookups.site.get(v.siteId)!.areaId)?.name ?? '') : '',
-                  f.number,
                   FPK_TYPE[f.type],
                   statusDisplay.label,
-                  statusDisplay.line2,
+                  statusDisplay.hint?.text ?? '',
                   fmtDate(f.startedAt ?? v.plannedStart),
                   fpkHeadcount(f),
                   access.money(v.clientId) ? v.monthlyValue : '—',
@@ -653,7 +689,9 @@ export const FpkListPage: React.FC = () => {
       </div>
       <Card pad={false}>
         <Table head={[
-          renderSortHeader('FPK', 'fpk'),
+          renderSortHeader('No. FPK', 'nomor'),
+          renderSortHeader('Klien', 'fpk'),
+          renderSortHeader('Site', 'site'),
           renderSortHeader('Status', 'status'),
           renderSortHeader('Mulai', 'start'),
           renderSortHeader('Orang', 'headcount'),
@@ -666,86 +704,36 @@ export const FpkListPage: React.FC = () => {
             const siteObj = lookups.site.get(v.siteId);
             const siteName = siteObj?.name ?? '–';
             const areaName = siteObj?.areaId ? (lookups.area.get(siteObj.areaId)?.name ?? '') : '';
-            const shortNumber = f.number.slice(-4);
             const typeLabel = f.type === 'perubahan' ? 'Perubahan' : f.type === 'perpanjangan' ? 'Perpanjangan' : '';
             const versionLabel = f.versions.length > 1 ? `v${v.no}` : '';
             const canSeeMoney = access.money(v.clientId);
 
             return (
-              <tr
-                key={f.id}
-                onClick={() => setSelectedFpkId(f.id)}
-                className={cx(
-                  'cursor-pointer transition-colors',
-                  isSelected ? 'bg-indigo-50/80 hover:bg-indigo-100/60' : 'hover:bg-slate-50/80'
-                )}
-              >
-                {/* 1. FPK (Klien di baris 1; Site · Area · Nomor di baris 2; garis kuning di kiri jika Giliran Anda) */}
+              <Tr key={f.id} selected={isSelected} onClick={() => setSelectedFpkId(f.id)}>
+                {/* 1. No. FPK (garis kuning di kiri jika Giliran Anda) */}
                 <Td className={cx(
-                  'transition-all',
-                  statusDisplay.isMyTurn
-                    ? 'border-l-[3px] border-amber-400 pl-3'
-                    : 'border-l-[3px] border-transparent pl-3'
+                  'whitespace-nowrap transition-all border-l-[3px] pl-3',
+                  statusDisplay.isMyTurn ? 'border-amber-400' : 'border-transparent'
                 )}>
-                  <div className="font-medium text-slate-900 text-sm leading-snug">
-                    {clientName}
-                  </div>
-                  <div className="text-[13px] text-slate-500 leading-snug mt-0.5 flex items-center gap-1 flex-wrap">
-                    <span>{siteName}</span>
-                    {areaName && (
-                      <>
-                        <span className="text-slate-300">·</span>
-                        <span>{areaName}</span>
-                      </>
-                    )}
-                    <span className="text-slate-300">·</span>
-                    <span title={f.number} className="font-mono text-slate-600 hover:text-indigo-600 cursor-help">
-                      {shortNumber}
-                    </span>
-                    {typeLabel && (
-                      <>
-                        <span className="text-slate-300">·</span>
-                        <span className="text-amber-700 font-medium">{typeLabel}</span>
-                      </>
-                    )}
-                    {versionLabel && (
-                      <>
-                        <span className="text-slate-300">·</span>
-                        <span className="text-slate-600 font-medium">{versionLabel}</span>
-                      </>
-                    )}
-                  </div>
+                  <span className="font-mono text-sm font-medium text-slate-900">{f.number}</span>
+                  {versionLabel && <span className="ml-1.5 text-[13px] text-slate-500 font-medium">{versionLabel}</span>}
+                  {typeLabel && <div className="text-[13px] text-amber-700 font-medium mt-0.5">{typeLabel}</div>}
                 </Td>
 
-                {/* 2. Status (titik + label, baris 2 hanya bila menambah informasi) */}
-                <Td className="min-w-[180px] max-w-[280px]">
-                  <div className="flex flex-col gap-0.5">
-                    {/* Baris 1: titik 8px + label status */}
-                    <div
-                      className="flex items-center gap-2 cursor-help"
-                      title={statusDisplay.reviewTooltip}
-                    >
-                      <span
-                        aria-hidden="true"
-                        className={cx('w-2 h-2 rounded-full shrink-0', statusDisplay.dotClass)}
-                      />
-                      <span className="text-sm font-medium text-slate-800 leading-snug">
-                        {statusDisplay.label}
-                      </span>
-                    </div>
+                {/* 2. Klien */}
+                <Td>
+                  <div className="font-medium text-slate-900 text-sm leading-snug">{clientName}</div>
+                </Td>
 
-                    {/* Baris 2: hanya bila ada informasi */}
-                    {statusDisplay.line2 ? (
-                      <div
-                        className={cx(
-                          'text-[13px] leading-snug break-words whitespace-normal',
-                          statusDisplay.isRed ? 'text-rose-600 font-semibold' : 'text-slate-500'
-                        )}
-                      >
-                        {statusDisplay.line2}
-                      </div>
-                    ) : null}
-                  </div>
+                {/* 3. Site (area di bawahnya) */}
+                <Td>
+                  <div className="text-sm text-slate-800 leading-snug">{siteName}</div>
+                  {areaName && <div className="text-[13px] text-slate-500 leading-snug mt-0.5">{areaName}</div>}
+                </Td>
+
+                {/* 4. Status: chip + ikon tooltip, tanpa baris kedua */}
+                <Td className="whitespace-nowrap">
+                  <StatusChip tone={statusDisplay.tone} label={statusDisplay.label} hint={statusDisplay.hint} />
                 </Td>
 
                 {/* 3. Mulai (tanggal saja) */}
@@ -768,11 +756,11 @@ export const FpkListPage: React.FC = () => {
                     </span>
                   )}
                 </Td>
-              </tr>
+              </Tr>
             );
           })}
         </Table>
-        {sortedRows.length === 0 && <p className="text-sm text-slate-500 p-4">Tidak ada FPK.</p>}
+        {sortedRows.length === 0 && <TableEmpty>Tidak ada FPK.</TableEmpty>}
       </Card>
 
       {/* Side Panel 40% Quick Preview */}

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Lock, Search, X, Paperclip, Download } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowLeft, Lock, Search, X, Paperclip, Download, AlertTriangle } from 'lucide-react';
 import type { Tone } from '../domain/labels';
 import { fmtDate, fmtRp } from '../domain/time';
 import { useStore } from '../store/store';
@@ -11,7 +11,7 @@ export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Bool
 
 const TONES: Record<Tone, string> = {
   slate: 'bg-slate-100 text-slate-700 border-slate-200',
-  blue: 'bg-amber-50 text-amber-900 border-amber-200',
+  blue: 'bg-blue-50 text-blue-700 border-blue-200',
   amber: 'bg-amber-100 text-amber-950 border-amber-300 font-semibold',
   green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   red: 'bg-rose-50 text-rose-700 border-rose-200',
@@ -129,7 +129,12 @@ export const Input = (p: React.InputHTMLAttributes<HTMLInputElement>) => <input 
 /** Input tanggal bawaan browser (formatnya ikut bahasa browser) + tanggal tertulis di bawahnya supaya tidak salah baca hari/bulan. */
 export const DateInput = (p: Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'>) => (
   <div className="min-w-0">
-    <input {...p} type="date" className={cx(inputCls, p.className)} />
+    <input
+      {...p}
+      type="date"
+      onClick={e => { try { e.currentTarget.showPicker(); } catch { /* fallback */ } p.onClick?.(e); }}
+      className={cx(inputCls, 'cursor-pointer', p.className)}
+    />
     {typeof p.value === 'string' && p.value && <div className="text-xs text-slate-600 mt-1">{fmtDate(p.value)}</div>}
   </div>
 );
@@ -180,18 +185,29 @@ export const Empty: React.FC<{ title: string; children?: React.ReactNode }> = ({
 );
 
 export const Tabs: React.FC<{ tabs: { key: string; label: React.ReactNode }[]; value: string; onChange: (k: string) => void }> = ({ tabs, value, onChange }) => (
-  <div className="flex gap-1 overflow-x-auto border-b border-slate-200 mb-4 -mx-1 px-1">
+  <div className="flex gap-1 overflow-x-auto overflow-y-hidden border-b border-slate-200 mb-4 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
     {tabs.map(t => (
       <button
         key={t.key}
         onClick={() => onChange(t.key)}
-        className={cx('px-3 py-2 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px', value === t.key ? 'border-amber-500 text-amber-950 font-bold' : 'border-transparent text-slate-500 hover:text-slate-800')}
+        className={cx('px-3 py-2 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px rounded-t-md focus:outline-hidden focus-visible:ring-2 focus-visible:ring-amber-300', value === t.key ? 'border-amber-500 text-amber-950 font-bold' : 'border-transparent text-slate-500 hover:text-slate-800')}
       >
         {t.label}
       </button>
     ))}
   </div>
 );
+
+/*
+ * STANDAR TABEL (dipakai di semua halaman)
+ * - Header: huruf kapital 11px abu (Table).
+ * - Baris yang punya detail: seluruh baris bisa diklik (Tr `to` / `onClick`), bukan link di dalam sel.
+ *   Klik pada tombol/link/input di dalam baris tidak memicu klik baris.
+ * - Teks utama 14px slate-900 medium; keterangan baris kedua 13px abu (CellSub).
+ * - Nomor dokumen/kode: font mono 14px (CellCode). Tidak ada teks 11-12px di dalam sel.
+ * - Status selalu chip (Badge / StatusChip).
+ * - Kosong: TableEmpty (rata tengah, 14px abu).
+ */
 
 /** Tabel dengan scroll horizontal di dalam kartu (halaman tetap tidak scroll ke samping). */
 export const Table: React.FC<{ head: React.ReactNode[]; children: React.ReactNode; empty?: React.ReactNode }> = ({ head, children, empty }) => (
@@ -209,7 +225,54 @@ export const Table: React.FC<{ head: React.ReactNode[]; children: React.ReactNod
     {empty}
   </div>
 );
-export const Td: React.FC<{ children?: React.ReactNode; className?: string }> = ({ children, className }) => <td className={cx('px-4 py-3 align-top', className)}>{children}</td>;
+export const Td: React.FC<{ children?: React.ReactNode; className?: string; colSpan?: number }> = ({ children, className, colSpan }) => (
+  <td colSpan={colSpan} className={cx('px-4 py-3 align-top text-sm', className)}>{children}</td>
+);
+
+/** Baris tabel standar. `to` = buka halaman, `onClick` = buka side modal. */
+export const Tr: React.FC<{
+  children: React.ReactNode;
+  to?: string;
+  onClick?: () => void;
+  selected?: boolean;
+  tone?: 'red';
+  muted?: boolean;
+  className?: string;
+}> = ({ children, to, onClick, selected, tone, muted, className }) => {
+  const { access } = useStore();
+  const perm = to ? DOC_PERM.find(([p]) => to.startsWith(p))?.[1] : undefined;
+  const target = to && (!perm || access.can(perm)) ? to : undefined;
+  const clickable = Boolean(onClick || target);
+  return (
+    <tr
+      onClick={clickable ? e => {
+        // Abaikan klik dari elemen interaktif di dalam baris (tombol, link, input, chip tooltip)
+        if ((e.target as HTMLElement).closest('button, a, input, select, textarea, label')) return;
+        if (onClick) onClick(); else if (target) navigate(target);
+      } : undefined}
+      className={cx(
+        'transition-colors',
+        clickable && 'cursor-pointer',
+        selected ? 'bg-indigo-50/80' : tone === 'red' ? 'bg-rose-50/50' : clickable && 'hover:bg-slate-50/80',
+        muted && 'opacity-60',
+        className,
+      )}
+    >
+      {children}
+    </tr>
+  );
+};
+
+/** Teks utama sel (nama). */
+export const CellMain: React.FC<{ children: React.ReactNode }> = ({ children }) => <div className="font-medium text-slate-900 leading-snug">{children}</div>;
+/** Keterangan baris kedua di sel. */
+export const CellSub: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => <div className={cx('text-[13px] text-slate-500 leading-snug mt-0.5', className)}>{children}</div>;
+/** Kode / nomor dokumen. */
+export const CellCode: React.FC<{ children: React.ReactNode }> = ({ children }) => <span className="font-mono text-sm text-slate-800 whitespace-nowrap">{children}</span>;
+/** Keadaan kosong tabel. */
+export const TableEmpty: React.FC<{ children?: React.ReactNode }> = ({ children = 'Tidak ada data.' }) => (
+  <p className="text-sm text-slate-500 text-center py-10">{children}</p>
+);
 
 export const Stat: React.FC<{ label: string; value: React.ReactNode; hint?: React.ReactNode; tone?: Tone }> = ({ label, value, hint, tone }) => (
   <div className={cx('rounded-xl border p-4 bg-white', tone === 'red' ? 'border-rose-200' : tone === 'amber' ? 'border-amber-200' : 'border-slate-200')}>
@@ -328,4 +391,119 @@ export const DocLink: React.FC<{ to: string; className?: string; children: React
   const perm = DOC_PERM.find(([p]) => to.startsWith(p))?.[1];
   if (perm && !access.can(perm)) return <span className={(className ?? '').replace(/text-indigo-\d+|hover:underline/g, '')}>{children}</span>;
   return <Link to={to} className={className}>{children}</Link>;
+};
+
+/** Tutup drawer dengan animasi: set `closing` dulu, panggil onClose setelah animasi keluar selesai. */
+export const useAnimatedClose = (onClose: () => void, ms = 220) => {
+  const [closing, setClosing] = useState(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const started = useRef(false);
+  const close = useCallback(() => {
+    if (started.current) return;
+    started.current = true;
+    setClosing(true);
+    window.setTimeout(() => onCloseRef.current(), ms);
+  }, [ms]);
+  return { closing, close };
+};
+
+/** Info tambahan di samping chip status: warn = perlu perhatian, danger = lewat batas/berisiko, info = keterangan. */
+export type StatusHint = { kind: 'warn' | 'danger' | 'info'; text: string };
+
+const HINT_ICON_CLS: Record<StatusHint['kind'], string> = {
+  warn: 'text-amber-500',
+  danger: 'text-rose-600',
+  info: 'text-slate-400',
+};
+
+/** Pembungkus yang menampilkan tooltip saat hover/fokus/tap. Posisi fixed supaya tidak terpotong tabel. */
+const HoverTip: React.FC<{ text: string; className?: string; children: React.ReactNode }> = ({ text, className, children }) => {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const show = (el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+    setPos({ x: r.left + r.width / 2, y: r.top });
+  };
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={text}
+        className={cx('inline-flex items-center rounded focus:outline-hidden focus-visible:ring-2 focus-visible:ring-amber-300 cursor-help', className)}
+        onMouseEnter={e => show(e.currentTarget)}
+        onMouseLeave={() => setPos(null)}
+        onFocus={e => show(e.currentTarget)}
+        onBlur={() => setPos(null)}
+        onClick={e => { e.stopPropagation(); if (pos) setPos(null); else show(e.currentTarget); }}
+      >
+        {children}
+      </button>
+      {pos && (
+        <span
+          role="tooltip"
+          className="fixed z-[70] -translate-x-1/2 -translate-y-full max-w-[260px] px-2.5 py-1.5 rounded-md bg-slate-900 text-white text-xs leading-snug shadow-lg pointer-events-none whitespace-normal"
+          style={{ left: pos.x, top: pos.y - 6 }}
+        >
+          {text}
+        </span>
+      )}
+    </>
+  );
+};
+
+/** Ikon kecil dengan tooltip (mis. gembok untuk nilai terbatas). */
+export const HintIcon: React.FC<{ icon: React.ComponentType<{ className?: string }>; text: string; className?: string }> = ({ icon: Icon, text, className }) => (
+  <HoverTip text={text} className={cx('p-0.5', className)}><Icon className="w-3.5 h-3.5" /></HoverTip>
+);
+
+/**
+ * Chip status. Bila ada info tambahan, chip-nya sendiri yang menampilkan tooltip saat di-hover.
+ * Ikon ⚠ hanya dipakai bila chip berwarna hijau (terlihat normal) padahal ada peringatan.
+ */
+export const StatusChip: React.FC<{ tone: Tone; label: string; hint?: StatusHint | null }> = ({ tone, label, hint }) => {
+  if (!hint) return <Badge tone={tone}>{label}</Badge>;
+  const flagged = tone === 'green' && hint.kind !== 'info';
+  return (
+    <HoverTip text={hint.text} className="gap-1.5">
+      <Badge tone={tone}>{label}</Badge>
+      {flagged && <AlertTriangle className={cx('w-3.5 h-3.5', HINT_ICON_CLS[hint.kind])} />}
+    </HoverTip>
+  );
+};
+
+const ACTIVITY_DOT: Record<string, string> = {
+  slate: 'bg-slate-300', blue: 'bg-blue-500', green: 'bg-emerald-500', amber: 'bg-amber-400', red: 'bg-rose-500',
+};
+
+/** Timeline log aktivitas (terbaru di atas). onOpenDoc: bila diisi, label dokumen bisa diklik. */
+export const ActivityLog: React.FC<{
+  items: { key: string; at: string; actorId?: string; text: string; note?: string; tone: string; doc?: { type: 'fpk' | 'spk'; id: string; label: string } }[];
+  onOpenDoc?: (doc: { type: 'fpk' | 'spk'; id: string }) => void;
+  empty?: string;
+}> = ({ items, onOpenDoc, empty = 'Belum ada aktivitas.' }) => {
+  const { lookups } = useStore();
+  if (!items.length) return <p className="text-sm text-slate-500">{empty}</p>;
+  return (
+    <ol className="relative">
+      {items.map((it, i) => (
+        <li key={it.key} className="relative pl-6 pb-4 last:pb-0">
+          {i < items.length - 1 && <span className="absolute left-[5px] top-3 bottom-0 w-px bg-slate-200" aria-hidden="true" />}
+          <span className={cx('absolute left-0 top-1.5 w-[11px] h-[11px] rounded-full ring-2 ring-white', ACTIVITY_DOT[it.tone] ?? ACTIVITY_DOT.slate)} aria-hidden="true" />
+          <div className="text-sm text-slate-800 leading-snug">
+            {it.doc && (
+              onOpenDoc
+                ? <button type="button" onClick={() => onOpenDoc(it.doc!)} className="font-mono text-xs text-indigo-700 hover:underline mr-1.5">{it.doc.label}</button>
+                : <span className="font-mono text-xs text-slate-500 mr-1.5">{it.doc.label}</span>
+            )}
+            {it.text}
+          </div>
+          {it.note && <div className="text-[13px] text-slate-600 mt-0.5">“{it.note}”</div>}
+          <div className="text-xs text-slate-400 mt-0.5">
+            {fmtDate(it.at)}{it.at.length > 10 ? `, ${it.at.slice(11, 16)}` : ''}
+            {it.actorId && lookups.user.get(it.actorId) ? ` · ${lookups.user.get(it.actorId)!.name}` : ''}
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
 };

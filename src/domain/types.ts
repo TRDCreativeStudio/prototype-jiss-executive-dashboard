@@ -268,6 +268,26 @@ export interface Spk {
   lapsedFrom?: string;
 }
 
+/** Draft SPK: isian form Input SPK yang disimpan sebelum dikirim ke Finance. Belum jadi SPK resmi. */
+export interface SpkDraft {
+  id: string;
+  createdBy: string;
+  updatedAt: string;
+  input: {
+    number: string;
+    type: SpkType;
+    parentSpkId?: string;
+    fpkId?: string;
+    siteId: string;
+    periodStart: string;
+    periodEnd: string;
+    effectiveDate?: string;
+    monthlyValue: number;
+    lines: { positionId: string; qty: number; shift: Shift; fpkLineId?: string }[];
+    pdfName: string;
+  };
+}
+
 // ---------- Memo ----------
 
 export type MemoType = 'perpanjangan_sama' | 'perpanjangan_ump' | 'pengakhiran_perusahaan' | 'pengakhiran_klien';

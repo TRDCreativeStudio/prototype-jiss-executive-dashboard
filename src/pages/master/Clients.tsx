@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Pencil, Copy, Check } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { Badge, Btn, Card, DL, ErrorText, ExportBtn, Field, Input, Modal, PageHeader, SearchBox, Select, Table, Td, Textarea, exportCsv, runAction, cx } from '../../ui/kit';
+import { Badge, Btn, Card, DL, ErrorText, ExportBtn, Field, Input, Modal, PageHeader, SearchBox, Select, Table, Td, Textarea, exportCsv, runAction, cx, Tr, CellMain, CellCode } from '../../ui/kit';
 import { Link } from '../../router';
 import { ActiveBadge, FpkMiniTable, SpkMiniTable, muted, runningIn } from './common';
 import { NotFound } from '../Misc';
@@ -130,14 +130,14 @@ export const ClientsPage: React.FC = () => {
             const breakdownTooltip = areas.map(aid => `${lookups.area.get(aid)?.name} ${sites.filter(s => s.areaId === aid).length}`).join('\n');
 
             return (
-              <tr key={c.id} className={muted(c.active)}>
-                <Td className="font-mono text-xs">{c.code}</Td>
-                <Td><Link to={`/klien/${c.id}`} className="font-semibold text-indigo-700 hover:underline">{c.name}</Link></Td>
+              <Tr key={c.id} to={`/klien/${c.id}`} muted={!c.active}>
+                <Td><CellCode>{c.code}</CellCode></Td>
+                <Td><CellMain>{c.name}</CellMain></Td>
                 <Td>
                   <div className="text-slate-800 text-sm font-medium">{c.picContact || '–'}</div>
                 </Td>
                 <Td>
-                  <div className="flex flex-col gap-1 text-xs">
+                  <div className="flex flex-col gap-1 text-[13px]">
                     {c.picEmail ? (
                       <CopyableItem text={c.picEmail} label="email" />
                     ) : null}
@@ -179,11 +179,11 @@ export const ClientsPage: React.FC = () => {
                 <Td className="whitespace-nowrap">{c.termDays} hari</Td>
                 <Td>
                   <div className="font-medium text-slate-800">{lookups.user.get(c.accountOwnerId)?.name ?? '–'}</div>
-                  {c.coOwnerIds.length > 0 && <div className="text-xs text-slate-500">Co-owner: {c.coOwnerIds.map(id => lookups.user.get(id)?.name).join(', ')}</div>}
+                  {c.coOwnerIds.length > 0 && <div className="text-[13px] text-slate-500 mt-0.5">Co-owner: {c.coOwnerIds.map(id => lookups.user.get(id)?.name).join(', ')}</div>}
                 </Td>
                 <Td><ActiveBadge active={c.active} /></Td>
                 <Td>{editable && <Btn size="sm" variant="ghost" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => setEdit(c)}>Ubah</Btn>}</Td>
-              </tr>
+              </Tr>
             );
           })}
         </Table>
@@ -232,12 +232,12 @@ export const ClientDetail: React.FC<{ id: string }> = ({ id }) => {
       <Card title={`Site per area (${sites.length})`} pad={false}>
         <Table head={['Area', 'Site', 'Alamat', 'Status']}>
           {areas.flatMap(aid => sites.filter(s => s.areaId === aid).map((s, i) => (
-            <tr key={s.id} className={muted(s.active)}>
-              <Td>{i === 0 && <Link to={`/area/${aid}`} className="font-semibold text-indigo-700 hover:underline">{lookups.area.get(aid)?.name}</Link>}</Td>
-              <Td><Link to={`/site/${s.id}`} className="font-medium hover:underline">{s.name}</Link></Td>
-              <Td className="text-xs text-slate-500">{s.address}</Td>
+            <Tr key={s.id} to={`/site/${s.id}`} muted={!s.active}>
+              <Td>{i === 0 && <CellMain>{lookups.area.get(aid)?.name}</CellMain>}</Td>
+              <Td><CellMain>{s.name}</CellMain></Td>
+              <Td className="text-[13px] text-slate-500">{s.address}</Td>
               <Td><ActiveBadge active={s.active} /></Td>
-            </tr>
+            </Tr>
           )))}
         </Table>
       </Card>

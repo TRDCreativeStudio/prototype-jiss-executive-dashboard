@@ -5,7 +5,8 @@ import {
   ExternalLink, Calendar, Users, Layers, Plus
 } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { AttachmentChip, Badge, Btn, Card, DL, Money, PageHeader, Table, Td, cx, toast } from '../../ui/kit';
+import { ActivityLog, AttachmentChip, Badge, Btn, Card, DL, Money, PageHeader, Table, Td, cx, toast, Tr, CellMain, CellSub, CellCode, TableEmpty } from '../../ui/kit';
+import { projectActivity } from '../../domain/activity';
 import { Link, navigate } from '../../router';
 import { NotFound } from '../Misc';
 import { FPK_STATUS, SPK_STATUS, PERSONNEL_STATUS } from '../../domain/labels';
@@ -64,6 +65,17 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
     updateDocParam(null);
     setActiveDoc(null);
     setDocHistory([]);
+  };
+
+  // Tutup dengan animasi geser keluar dulu, baru lepas dokumennya
+  const [docClosing, setDocClosing] = useState(false);
+  const requestCloseDoc = () => {
+    if (docClosing) return;
+    setDocClosing(true);
+    window.setTimeout(() => {
+      closeDoc();
+      setDocClosing(false);
+    }, 220);
   };
 
   const handleNavigateDoc = (target: ActiveDoc) => {
@@ -193,19 +205,15 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
     }
   });
 
-  // Audit and activity log for this project
-  const fpkIds = new Set(projectFpks.map(f => f.id));
-  const spkIds = new Set(projectSpks.map(s => s.id));
-  const auditLogs = state.audit.filter(a =>
-    a.entityId === site.id ||
-    a.entityId === site.clientId ||
-    fpkIds.has(a.entityId) ||
-    spkIds.has(a.entityId) ||
-    a.action.toLowerCase().includes(site.name.toLowerCase()) ||
-    a.action.toLowerCase().includes(site.code.toLowerCase())
-  );
 
-  const primaryFpk = activeFpk ?? projectFpks[0];
+
+  // FPK yang sudah disetujui/berjalan dan belum punya SPK yang sedang diproses → Marketing boleh input SPK
+  const spkReadyFpk = projectFpks.find(f =>
+    ['disetujui', 'berjalan', 'tertutup_sebagian'].includes(f.status) &&
+    !state.spks.some(sp => sp.fpkId === f.id && (sp.status === 'diinput' || sp.status === 'perlu_revisi'))
+  );
+  const canInputSpk = Boolean(spkReadyFpk && access.can('spk.input'));
+  const inputSpkHref = spkReadyFpk ? `/spk/input?project=${site.id}&fpk=${spkReadyFpk.id}` : '';
 
   return (
     <div className="space-y-6">
@@ -226,14 +234,6 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
         }
         actions={
           <div className="flex items-center gap-2">
-            {!activeSpk && projectFpks.length > 0 && access.can('spk.input') && primaryFpk && (
-              <Btn
-                icon={<Plus className="w-4 h-4" />}
-                onClick={() => navigate(`/spk/input?project=${site.id}&fpk=${primaryFpk.id}`)}
-              >
-                Input SPK
-              </Btn>
-            )}
             <Badge tone={site.active ? 'green' : 'slate'} className="text-xs px-2.5 py-1">
               Project {site.active ? 'Aktif' : 'Nonaktif'}
             </Badge>
@@ -242,14 +242,14 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
       />
 
       {/* Top Cards: Nilai Project & Status Dokumen */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Card 1: Nilai Kontrak / Bulan */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-1">
+        <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-xs">
+          <div className="flex items-start justify-between gap-2 text-xs font-semibold text-slate-500 mb-1">
             <span>Nilai Kontrak / Bulan</span>
             <DollarSign className="w-4 h-4 text-amber-500" />
           </div>
-          <div className="text-xl font-bold text-slate-900">
+          <div className="text-base sm:text-xl font-bold text-slate-900 break-words">
             {monthlyValue > 0 ? (
               <Money value={monthlyValue} clientId={site.clientId} />
             ) : (
@@ -263,8 +263,8 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
         </div>
 
         {/* Card 2: Periode Kontrak */}
-        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs">
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-1">
+        <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-xs">
+          <div className="flex items-start justify-between gap-2 text-xs font-semibold text-slate-500 mb-1">
             <span>Periode Project</span>
             <Calendar className="w-4 h-4 text-amber-500" />
           </div>
@@ -280,17 +280,17 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
         <div
           onClick={() => {
             if (activeFpk) {
-              if (activeDoc?.type === 'fpk' && activeDoc.id === activeFpk.id) closeDoc();
+              if (activeDoc?.type === 'fpk' && activeDoc.id === activeFpk.id) requestCloseDoc();
               else openDoc({ type: 'fpk', id: activeFpk.id });
             }
           }}
           className={cx(
-            'bg-white border rounded-xl p-4 shadow-xs transition-colors',
+            'bg-white border rounded-xl p-3 sm:p-4 shadow-xs transition-colors',
             activeFpk ? 'cursor-pointer hover:border-indigo-300 hover:bg-slate-50/50' : '',
             activeDoc?.type === 'fpk' && activeFpk && activeDoc.id === activeFpk.id ? 'border-indigo-600 ring-2 ring-indigo-100' : 'border-slate-200'
           )}
         >
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-1">
+          <div className="flex items-start justify-between gap-2 text-xs font-semibold text-slate-500 mb-1">
             <span>Status FPK</span>
             <FileText className="w-4 h-4 text-amber-500" />
           </div>
@@ -309,7 +309,7 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
             )}
           </div>
           <div className="text-[11px] text-slate-500 mt-1">
-            {projectFpks.length} dokumen FPK terdaftar · Klik untuk lihat
+            <span className="hidden sm:inline">{projectFpks.length} dokumen FPK terdaftar · </span>Klik untuk lihat
           </div>
         </div>
 
@@ -317,58 +317,58 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
         <div
           onClick={() => {
             if (activeSpk) {
-              if (activeDoc?.type === 'spk' && activeDoc.id === activeSpk.id) closeDoc();
+              if (activeDoc?.type === 'spk' && activeDoc.id === activeSpk.id) requestCloseDoc();
               else openDoc({ type: 'spk', id: activeSpk.id });
             }
           }}
           className={cx(
-            'bg-white border rounded-xl p-4 shadow-xs transition-colors',
+            'bg-white border rounded-xl p-3 sm:p-4 shadow-xs transition-colors',
             activeSpk ? 'cursor-pointer hover:border-teal-300 hover:bg-slate-50/50' : '',
             activeDoc?.type === 'spk' && activeSpk && activeDoc.id === activeSpk.id ? 'border-teal-600 ring-2 ring-teal-100' : 'border-slate-200'
           )}
         >
-          <div className="flex items-center justify-between text-xs font-semibold text-slate-500 mb-1">
+          <div className="flex items-start justify-between gap-2 text-xs font-semibold text-slate-500 mb-1">
             <span>Status SPK</span>
             <FileCheck2 className="w-4 h-4 text-amber-500" />
           </div>
           <div className="mt-1">
-            {activeSpk ? (
-              <div className="space-y-1">
-                <Badge tone={SPK_STATUS[activeSpk.status].tone}>
-                  {SPK_STATUS[activeSpk.status].label}
-                </Badge>
-                <div className="text-[11px] text-indigo-600 font-mono font-medium">
-                  {activeSpk.number}
+            <div className="flex flex-col items-start gap-2">
+              {activeSpk ? (
+                <div className="space-y-1">
+                  <Badge tone={SPK_STATUS[activeSpk.status].tone}>
+                    {SPK_STATUS[activeSpk.status].label}
+                  </Badge>
+                  <div className="text-[11px] text-indigo-600 font-mono font-medium">
+                    {activeSpk.number}
+                  </div>
                 </div>
-              </div>
-            ) : projectFpks.length > 0 ? (
-              <div className="flex items-center justify-between gap-2">
+              ) : spkReadyFpk?.status === 'berjalan' ? (
                 <Badge tone="amber">Jalan tanpa SPK</Badge>
-                {access.can('spk.input') && primaryFpk && (
-                  <Btn
-                    size="sm"
-                    icon={<Plus className="w-3.5 h-3.5" />}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      navigate(`/spk/input?project=${site.id}&fpk=${primaryFpk.id}`);
-                    }}
-                  >
-                    Input SPK
-                  </Btn>
-                )}
-              </div>
-            ) : (
-              <Badge tone="slate">Belum ada SPK</Badge>
-            )}
+              ) : (
+                <Badge tone="slate">Belum ada SPK</Badge>
+              )}
+              {canInputSpk && (
+                <Btn
+                  size="sm"
+                  icon={<Plus className="w-3.5 h-3.5" />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(inputSpkHref);
+                  }}
+                >
+                  Input SPK
+                </Btn>
+              )}
+            </div>
           </div>
           <div className="text-[11px] text-slate-500 mt-1">
-            {projectSpks.length} dokumen SPK terdaftar · {activeSpk ? 'Klik untuk lihat' : (projectFpks.length > 0 && access.can('spk.input') ? 'Klik tombol untuk input' : '–')}
+            <span className="hidden sm:inline">{projectSpks.length} dokumen SPK terdaftar</span>{activeSpk ? <><span className="hidden sm:inline"> · </span>Klik untuk lihat</> : ''}
           </div>
         </div>
       </div>
 
       {/* Tabs navigation */}
-      <div className="flex border-b border-slate-200 gap-6 text-sm">
+      <div className="flex border-b border-slate-200 gap-6 text-sm overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {[
           { key: 'overview', label: 'Overview' },
           { key: 'keamanan', label: 'Personel Keamanan' },
@@ -625,8 +625,8 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
                 const a = actualMap.get(pid) ?? 0;
                 const diff = a - q;
                 return (
-                  <tr key={pid}>
-                    <Td className="w-10 text-slate-400 font-mono text-xs">{idx + 1}</Td>
+                  <Tr key={pid}>
+                    <Td className="w-10 text-slate-400 font-mono">{idx + 1}</Td>
                     <Td className="font-medium text-slate-800">
                       {lookups.position.get(pid)?.name ?? pid}
                     </Td>
@@ -641,15 +641,15 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
                         <Badge tone="amber">Lebih {diff}</Badge>
                       )}
                     </Td>
-                  </tr>
+                  </Tr>
                 );
               })}
               {allPositions.length === 0 && (
-                <tr>
+                <Tr>
                   <td colSpan={5} className="text-center py-6 text-sm text-slate-400">
                     Belum ada formasi yang ditentukan untuk project ini.
                   </td>
-                </tr>
+                </Tr>
               )}
             </Table>
           </Card>
@@ -673,30 +673,30 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
           >
             <Table head={['No', 'No. Pegawai', 'Nama Personel', 'Jabatan', 'Seragam', 'Sepatu', 'Status']}>
               {sortedPersonnel.map((p, idx) => (
-                <tr key={p.id}>
-                  <Td className="w-10 text-slate-400 font-mono text-xs">{idx + 1}</Td>
-                  <Td className="font-mono text-xs text-slate-500">{p.employeeNo}</Td>
+                <Tr key={p.id} to={`/security/${p.id}`}>
+                  <Td className="w-10 text-slate-400 font-mono">{idx + 1}</Td>
+                  <Td className="font-mono text-slate-500">{p.employeeNo}</Td>
                   <Td>
-                    <Link to={`/security/${p.id}`} className="font-medium text-indigo-700 hover:underline">
+                    <CellMain>
                       {p.name}
-                    </Link>
+                    </CellMain>
                   </Td>
                   <Td className="text-slate-700 font-medium">{lookups.position.get(p.positionId)?.name}</Td>
-                  <Td className="text-center font-mono text-xs">{p.uniformSize}</Td>
-                  <Td className="text-center font-mono text-xs">{p.shoeSize}</Td>
+                  <Td className="text-center font-mono">{p.uniformSize}</Td>
+                  <Td className="text-center font-mono">{p.shoeSize}</Td>
                   <Td>
                     <Badge tone={PERSONNEL_STATUS[p.status].tone}>
                       {PERSONNEL_STATUS[p.status].label}
                     </Badge>
                   </Td>
-                </tr>
+                </Tr>
               ))}
               {sortedPersonnel.length === 0 && (
-                <tr>
+                <Tr>
                   <td colSpan={7} className="text-center py-8 text-sm text-slate-400">
                     Belum ada personel security yang ditugaskan di lokasi ini.
                   </td>
-                </tr>
+                </Tr>
               )}
             </Table>
           </Card>
@@ -714,7 +714,6 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
                 <span>Dokumen FPK ({projectFpks.length})</span>
               </div>
             }
-            actions={<span className="text-[11px] text-slate-400">Klik baris untuk drawer preview</span>}
             pad={false}
           >
             <Table head={['Nomor FPK', 'Status', 'Mulai Jaga', 'Orang', 'Nilai/Bln']}>
@@ -722,44 +721,37 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
                 const cur = latest(f);
                 const isSelected = activeDoc?.type === 'fpk' && activeDoc.id === f.id;
                 return (
-                  <tr
+                  <Tr
                     key={f.id}
+                    selected={isSelected}
                     onClick={() => {
-                      if (isSelected) closeDoc();
+                      if (isSelected) requestCloseDoc();
                       else openDoc({ type: 'fpk', id: f.id });
                     }}
-                    className={cx(
-                      'cursor-pointer transition-colors',
-                      isSelected
-                        ? 'bg-indigo-50/90 border-l-4 border-l-indigo-600 font-medium'
-                        : 'hover:bg-slate-50/80'
-                    )}
                   >
                     <Td>
-                      <span className="font-mono font-semibold text-indigo-700 hover:underline">
-                        {f.number}
-                      </span>
-                      <div className="text-[11px] text-slate-400 capitalize">{f.type} · v{cur.no}</div>
+                      <CellCode>{f.number}</CellCode>
+                      <CellSub className="capitalize">{f.type} · v{cur.no}</CellSub>
                     </Td>
                     <Td>
                       <Badge tone={FPK_STATUS[f.status].tone}>
                         {FPK_STATUS[f.status].label}
                       </Badge>
                     </Td>
-                    <Td className="text-xs whitespace-nowrap">{fmtDate(cur.periodStart)}</Td>
-                    <Td className="text-center tabular-nums">{fpkHeadcount(f)}</Td>
+                    <Td className="whitespace-nowrap">{fmtDate(cur.periodStart)}</Td>
+                    <Td className="tabular-nums">{fpkHeadcount(f)}</Td>
                     <Td className="whitespace-nowrap">
                       <Money value={cur.monthlyValue} clientId={cur.clientId} />
                     </Td>
-                  </tr>
+                  </Tr>
                 );
               })}
               {projectFpks.length === 0 && (
-                <tr>
+                <Tr>
                   <td colSpan={5} className="text-center py-6 text-sm text-slate-400">
                     Belum ada dokumen FPK untuk project ini.
                   </td>
-                </tr>
+                </Tr>
               )}
             </Table>
           </Card>
@@ -774,16 +766,15 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
             }
             actions={
               <div className="flex items-center gap-2">
-                {projectSpks.length === 0 && projectFpks.length > 0 && access.can('spk.input') && primaryFpk && (
+                {canInputSpk && (
                   <Btn
                     size="sm"
                     icon={<Plus className="w-3 h-3" />}
-                    onClick={() => navigate(`/spk/input?project=${site.id}&fpk=${primaryFpk.id}`)}
+                    onClick={() => navigate(inputSpkHref)}
                   >
                     Input SPK
                   </Btn>
                 )}
-                <span className="text-[11px] text-slate-400">Klik baris untuk drawer preview</span>
               </div>
             }
             pad={false}
@@ -792,55 +783,47 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
               {projectSpks.map(s => {
                 const isSelected = activeDoc?.type === 'spk' && activeDoc.id === s.id;
                 return (
-                  <tr
+                  <Tr
                     key={s.id}
+                    selected={isSelected}
                     onClick={() => {
-                      if (isSelected) closeDoc();
+                      if (isSelected) requestCloseDoc();
                       else openDoc({ type: 'spk', id: s.id });
                     }}
-                    className={cx(
-                      'cursor-pointer transition-colors',
-                      isSelected
-                        ? 'bg-teal-50/90 border-l-4 border-l-teal-600 font-medium'
-                        : 'hover:bg-slate-50/80'
-                    )}
                   >
                     <Td>
-                      <span className="font-mono font-semibold text-indigo-700 hover:underline">
-                        {s.number}
-                      </span>
-                      {s.isInitialData && <span className="block text-[10px] text-slate-400">data awal</span>}
+                      <CellCode>{s.number}</CellCode>
                     </Td>
                     <Td>
                       <Badge tone={SPK_STATUS[s.status].tone}>
                         {SPK_STATUS[s.status].label}
                       </Badge>
                     </Td>
-                    <Td className="text-xs whitespace-nowrap">
+                    <Td className="whitespace-nowrap">
                       {fmtDate(s.periodStart)} – {fmtDate(s.periodEnd)}
                     </Td>
-                    <Td className="text-center tabular-nums">{spkHeadcount(s)}</Td>
+                    <Td className="tabular-nums">{spkHeadcount(s)}</Td>
                     <Td className="whitespace-nowrap">
                       <Money value={s.monthlyValue} clientId={s.clientId} />
                     </Td>
-                  </tr>
+                  </Tr>
                 );
               })}
               {projectSpks.length === 0 && (
-                <tr>
+                <Tr>
                   <td colSpan={5} className="text-center py-8 text-sm text-slate-500">
                     <p className="mb-2.5">Belum ada dokumen SPK untuk project ini.</p>
-                    {projectFpks.length > 0 && access.can('spk.input') && primaryFpk && (
+                    {canInputSpk && (
                       <Btn
                         size="sm"
                         icon={<Plus className="w-3.5 h-3.5" />}
-                        onClick={() => navigate(`/spk/input?project=${site.id}&fpk=${primaryFpk.id}`)}
+                        onClick={() => navigate(inputSpkHref)}
                       >
                         Input SPK Sekarang
                       </Btn>
                     )}
                   </td>
-                </tr>
+                </Tr>
               )}
             </Table>
           </Card>
@@ -893,54 +876,32 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
           }
           pad={false}
         >
-          <Table head={['Aktivitas', 'Waktu', 'Pengguna', 'Keterangan']}>
-            {auditLogs.map(a => (
-              <tr key={a.id}>
-                <Td className="text-sm font-medium text-slate-900">
-                  {a.action}
-                  <div className="text-[11px] text-slate-400 font-mono capitalize">
-                    {a.entity} ({a.entityId})
-                  </div>
-                </Td>
-                <Td className="whitespace-nowrap text-xs text-slate-500">{fmtDateTime(a.at)}</Td>
-                <Td className="text-xs">
-                  <span className="font-medium text-slate-800">
-                    {lookups.user.get(a.actorId)?.name ?? (a.actorId === 'sistem' ? 'Sistem' : a.actorId)}
-                  </span>
-                  {a.onBehalfOfId && (
-                    <div className="text-slate-400 text-[11px]">
-                      an. {lookups.user.get(a.onBehalfOfId)?.name}
-                    </div>
-                  )}
-                </Td>
-                <Td className="text-xs text-slate-600">
-                  {a.after ? (
-                    <div>
-                      {a.before && <span className="line-through text-slate-400 mr-1.5">{a.before}</span>}
-                      <span className="text-slate-800 font-medium">{a.after}</span>
-                    </div>
-                  ) : (
-                    '–'
-                  )}
-                </Td>
-              </tr>
-            ))}
-            {auditLogs.length === 0 && (
-              <tr>
-                <td colSpan={4} className="text-center py-8 text-sm text-slate-400">
-                  Belum ada log aktivitas tercatat untuk project ini.
-                </td>
-              </tr>
-            )}
-          </Table>
+          <div className="p-5">
+            <ActivityLog
+              items={projectActivity(site, projectFpks, state.spks, state.audit, access.money(site.clientId))}
+              onOpenDoc={doc => openDoc(doc)}
+              empty="Belum ada aktivitas di project ini."
+            />
+          </div>
         </Card>
+      )}
+
+      {/* Backdrop: klik di luar drawer menutupnya (sama seperti panel di daftar FPK/SPK) */}
+      {activeDoc && (
+        <div
+          className="drawer-backdrop fixed inset-0 z-40 bg-slate-900/20"
+          data-closing={docClosing}
+          onClick={requestCloseDoc}
+          aria-hidden="true"
+        />
       )}
 
       {/* Document Drawer (FPK / SPK) */}
       {activeDoc && (
         <ProjectDocDrawer
           activeDoc={activeDoc}
-          onClose={closeDoc}
+          closing={docClosing}
+          onClose={requestCloseDoc}
           onNavigateDoc={handleNavigateDoc}
           onBackDoc={docHistory.length > 0 ? handleBackDoc : undefined}
           prevDocTitle={prevDocTitle}

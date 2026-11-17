@@ -1,6 +1,6 @@
 import React from 'react';
 import { useStore } from '../../store/store';
-import { Badge, Card, Table, Td, Money, cx, DocLink } from '../../ui/kit';
+import { Badge, Card, Table, Td, Tr, CellMain, CellCode, TableEmpty, Money, cx } from '../../ui/kit';
 import { Link } from '../../router';
 import { FPK_STATUS, SPK_STATUS } from '../../domain/labels';
 import { activeByPosition, effectiveSpks, latest, quotaByPosition, spkHeadcount } from '../../domain/selectors';
@@ -31,21 +31,21 @@ export const QuotaTable: React.FC<{ areaId: string; siteId?: string }> = ({ area
     >
       <Table head={['Jabatan', 'Security aktif', 'Kuota SPK aktif', 'Selisih']}>
         {posIds.map(pid => (
-          <tr key={pid}>
-            <Td className="font-medium">{lookups.position.get(pid)?.name}</Td>
+          <Tr key={pid}>
+            <Td><CellMain>{lookups.position.get(pid)?.name}</CellMain></Td>
             <Td className="tabular-nums">{actual.get(pid) ?? 0}</Td>
             <Td className="tabular-nums">{quota.get(pid) ?? 0}</Td>
             <Td>{diff(actual.get(pid) ?? 0, quota.get(pid) ?? 0)}</Td>
-          </tr>
+          </Tr>
         ))}
-        <tr className="bg-slate-50 font-semibold">
+        <Tr className="bg-slate-50 font-semibold">
           <Td>Total</Td>
           <Td className="tabular-nums">{totalA}</Td>
           <Td className="tabular-nums">{totalQ}</Td>
           <Td>{diff(totalA, totalQ)}</Td>
-        </tr>
+        </Tr>
       </Table>
-      <p className="text-[11px] text-slate-500 px-4 py-3 border-t border-slate-100">
+      <p className="text-[13px] text-slate-500 px-4 py-3 border-t border-slate-100">
         {siteId
           ? 'Hanya menghitung security yang site-nya diisi. HR saat ini mencatat personel per area, jadi angka per site bisa kurang lengkap.'
           : 'Batasan yang diketahui: kuota dihitung per area, jadi kekurangan di satu site bisa tertutup kelebihan di site lain pada area yang sama. Kelebihan biasanya berarti ada site yang masih jalan tanpa SPK.'}
@@ -58,24 +58,22 @@ export const FpkMiniTable: React.FC<{ fpks: Fpk[]; title?: string }> = ({ fpks, 
   const { lookups } = useStore();
   return (
     <Card title={`${title} (${fpks.length})`} pad={false}>
-      <Table head={['Nomor', 'Klien / site', 'Status', 'Mulai', 'Nilai/bulan']}>
+      <Table head={['No. FPK', 'Klien', 'Site', 'Status', 'Mulai', 'Nilai/bulan']}>
         {fpks.map(f => {
           const v = latest(f);
           return (
-            <tr key={f.id}>
-              <Td><DocLink to={`/fpk/${f.id}`} className="font-semibold text-indigo-700 hover:underline">{f.number}</DocLink></Td>
-              <Td>
-                <div className="font-medium">{lookups.client.get(v.clientId)?.name}</div>
-                <div className="text-xs text-slate-500">{lookups.site.get(v.siteId)?.name}</div>
-              </Td>
+            <Tr key={f.id} to={`/fpk/${f.id}`}>
+              <Td><CellCode>{f.number}</CellCode></Td>
+              <Td><CellMain>{lookups.client.get(v.clientId)?.name}</CellMain></Td>
+              <Td>{lookups.site.get(v.siteId)?.name}</Td>
               <Td><Badge tone={FPK_STATUS[f.status].tone}>{FPK_STATUS[f.status].label}</Badge></Td>
               <Td className="whitespace-nowrap">{fmtDate(f.startedAt ?? v.plannedStart)}</Td>
-              <Td><Money value={v.monthlyValue} clientId={v.clientId} /></Td>
-            </tr>
+              <Td className="whitespace-nowrap"><Money value={v.monthlyValue} clientId={v.clientId} /></Td>
+            </Tr>
           );
         })}
       </Table>
-      {fpks.length === 0 && <p className="text-sm text-slate-500 px-4 py-4">Tidak ada.</p>}
+      {fpks.length === 0 && <TableEmpty>Tidak ada FPK.</TableEmpty>}
     </Card>
   );
 };
@@ -84,25 +82,20 @@ export const SpkMiniTable: React.FC<{ spks: Spk[]; title?: string }> = ({ spks, 
   const { lookups } = useStore();
   return (
     <Card title={`${title} (${spks.length})`} pad={false}>
-      <Table head={['Nomor', 'Klien / site', 'Status', 'Periode', 'Orang', 'Nilai/bulan']}>
+      <Table head={['No. SPK', 'Klien', 'Site', 'Status', 'Periode', 'Personel', 'Nilai/bulan']}>
         {spks.map(s => (
-          <tr key={s.id}>
-            <Td>
-              <DocLink to={`/spk/${s.id}`} className="font-semibold text-indigo-700 hover:underline whitespace-nowrap">{s.number}</DocLink>
-              {s.isInitialData && <div><Badge tone="slate" className="mt-1">data awal</Badge></div>}
-            </Td>
-            <Td>
-              <div className="font-medium">{lookups.client.get(s.clientId)?.name}</div>
-              <div className="text-xs text-slate-500">{lookups.site.get(s.siteId)?.name}</div>
-            </Td>
+          <Tr key={s.id} to={`/spk/${s.id}`}>
+            <Td><CellCode>{s.number}</CellCode></Td>
+            <Td><CellMain>{lookups.client.get(s.clientId)?.name}</CellMain></Td>
+            <Td>{lookups.site.get(s.siteId)?.name}</Td>
             <Td><Badge tone={SPK_STATUS[s.status].tone}>{SPK_STATUS[s.status].label}</Badge></Td>
-            <Td className="whitespace-nowrap text-xs">{fmtDate(s.periodStart)} – {fmtDate(s.periodEnd)}</Td>
+            <Td className="whitespace-nowrap">{fmtDate(s.periodStart)} – {fmtDate(s.periodEnd)}</Td>
             <Td className="tabular-nums">{spkHeadcount(s)}</Td>
-            <Td><Money value={s.monthlyValue} clientId={s.clientId} /></Td>
-          </tr>
+            <Td className="whitespace-nowrap"><Money value={s.monthlyValue} clientId={s.clientId} /></Td>
+          </Tr>
         ))}
       </Table>
-      {spks.length === 0 && <p className="text-sm text-slate-500 px-4 py-4">Tidak ada.</p>}
+      {spks.length === 0 && <TableEmpty>Tidak ada SPK.</TableEmpty>}
     </Card>
   );
 };

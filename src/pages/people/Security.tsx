@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Btn, ErrorText, Field, Select as Sel, Textarea, toast } from '../../ui/kit';
+import { Btn, ErrorText, Field, Select as Sel, Textarea, toast, Tr, CellMain, CellCode } from '../../ui/kit';
 import { has } from '../../domain/rbac';
 import { useStore } from '../../store/store';
 import { Badge, Card, DL, PageHeader, SearchBox, Select, Table, Td, ExportBtn, exportCsv } from '../../ui/kit';
@@ -47,18 +47,18 @@ export const SecurityPage: React.FC = () => {
           {rows.map(p => {
             const pl = currentPlacement(p);
             return (
-              <tr key={p.id}>
-                <Td className="font-mono text-xs">{p.employeeNo}</Td>
-                <Td><Link to={`/security/${p.id}`} className="font-semibold text-indigo-700 hover:underline">{p.name}</Link></Td>
+              <Tr key={p.id} to={`/security/${p.id}`}>
+                <Td><CellCode>{p.employeeNo}</CellCode></Td>
+                <Td><CellMain>{p.name}</CellMain></Td>
                 <Td>{lookups.position.get(p.positionId)?.name}</Td>
                 <Td>
                   <div>{lookups.area.get(pl?.areaId ?? '')?.name ?? '–'}</div>
-                  <div className="text-xs text-slate-500">{lookups.site.get(pl?.siteId ?? '')?.name ?? 'site belum diisi'}</div>
+                  <div className="text-[13px] text-slate-500 mt-0.5">{lookups.site.get(pl?.siteId ?? '')?.name ?? 'site belum diisi'}</div>
                 </Td>
                 <Td><Badge tone={PERSONNEL_STATUS[p.status].tone}>{PERSONNEL_STATUS[p.status].label}</Badge></Td>
                 <Td className="whitespace-nowrap">{p.uniformSize} / {p.shoeSize}</Td>
                 <Td className="whitespace-nowrap">{fmtDate(pl?.start)}</Td>
-              </tr>
+              </Tr>
             );
           })}
         </Table>
@@ -117,16 +117,16 @@ export const SecurityDetail: React.FC<{ id: string }> = ({ id }) => {
       <Card title="Riwayat penempatan" pad={false}>
         <Table head={['Area', 'Site', 'FPK / SPK', 'Mulai', 'Selesai']}>
           {[...p.placements].reverse().map((x, i) => (
-            <tr key={i}>
+            <Tr key={i} to={x.fpkId ? `/fpk/${x.fpkId}` : undefined}>
               <Td>{lookups.area.get(x.areaId)?.name}</Td>
               <Td>{lookups.site.get(x.siteId ?? '')?.name ?? '–'}</Td>
-              <Td className="text-xs">
-                {x.fpkId && access.can('fpk.view') ? <Link to={`/fpk/${x.fpkId}`} className="text-indigo-700 hover:underline">{lookups.fpk.get(x.fpkId)?.number}</Link> : x.fpkId ? lookups.fpk.get(x.fpkId)?.number : ''}
-                {x.spkId && <div>{lookups.spk.get(x.spkId)?.number}</div>}
+              <Td>
+                {x.fpkId && <div><CellCode>{lookups.fpk.get(x.fpkId)?.number}</CellCode></div>}
+                {x.spkId && <div><CellCode>{lookups.spk.get(x.spkId)?.number}</CellCode></div>}
               </Td>
               <Td className="whitespace-nowrap">{fmtDate(x.start)}</Td>
               <Td className="whitespace-nowrap">{x.end ? fmtDate(x.end) : 'sekarang'}</Td>
-            </tr>
+            </Tr>
           ))}
         </Table>
       </Card>

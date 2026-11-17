@@ -1,6 +1,6 @@
 // Hitungan turunan yang dipakai beberapa layar.
 import type { Fpk, Personnel, Spk, Site } from './types';
-import { TODAY, diffDays, heldValue } from './time';
+import { TODAY, diffDays, heldValue, addDays } from './time';
 
 export const latest = (f: Fpk) => f.versions[f.versions.length - 1];
 
@@ -119,3 +119,35 @@ export const lapsedSpkList = (spks: Spk[], sites: Site[], today = TODAY): Lapsed
     held: heldValue(s.monthlyValue, s.lapsedFrom!, today),
     pendingSpk: spks.find(x => x.parentSpkId === s.id && x.type === 'perpanjangan' && (x.status === 'diinput' || x.status === 'perlu_revisi')),
   }));
+
+export interface UnbilledGap {
+  spk: Spk;
+  fpk: Fpk;
+  from: string;
+  to: string;
+  days: number;
+  value: number;
+  /** true bila SPK sudah aktif (tercatat), false bila masih menunggu verifikasi/revisi (potensi). */
+  final: boolean;
+}
+
+/**
+ * Hari tidak tertagih (PRD SPK langkah 3): site sudah dijaga sebelum periode SPK dimulai,
+ * sehingga hari-hari itu tidak tercakup SPK dan tidak bisa ditagih.
+ */
+export const unbilledGaps = (fpks: Fpk[], spks: Spk[], today = TODAY): UnbilledGap[] =>
+  spks
+    .filter(s => s.fpkId && s.type === 'baru' && ['aktif', 'diinput', 'perlu_revisi'].includes(s.status))
+    .map(s => {
+      const f = fpks.find(x => x.id === s.fpkId);
+      if (!f?.startedAt || diffDays(f.startedAt, s.periodStart) <= 0) return null;
+      const to = addDays(s.periodStart, -1);
+      const end = diffDays(to, today) < 0 ? today : to;
+      return {
+        spk: s, fpk: f, from: f.startedAt, to: end,
+        days: diffDays(f.startedAt, end) + 1,
+        value: heldValue(s.monthlyValue, f.startedAt, end),
+        final: s.status === 'aktif',
+      };
+    })
+    .filter((x): x is UnbilledGap => !!x);

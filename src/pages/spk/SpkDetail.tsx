@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CheckCircle2, XCircle, ThumbsUp, Lock, AlertTriangle, FileEdit, Receipt } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { AttachmentChip, Badge, Btn, Card, DL, Input, Money, PageHeader, Table, Td, cx, toast, DocLink, StickyActionBar } from '../../ui/kit';
+import { AttachmentChip, Badge, Btn, Card, DL, Input, Money, PageHeader, Table, Td, cx, toast, DocLink, StickyActionBar, Tr } from '../../ui/kit';
 import { ReasonModal } from '../../ui/ReasonModal';
 import { Link, navigate } from '../../router';
 import { NotFound } from '../Misc';
@@ -112,12 +112,12 @@ export const SpkDetailPage: React.FC<{ id: string }> = ({ id }) => {
             <Card title={f && s.type !== 'perpanjangan' ? 'Perbandingan dengan FPK' : `Perbandingan dengan SPK induk ${parentForCompare?.number}${memoV ? ' dan memo yang disetujui klien' : ''}`} pad={false}>
               <Table head={['Field', 'SPK', f ? 'FPK' : 'Acuan', '']}>
                 {diffs.map((d, i) => (
-                  <tr key={i} className={cx(!d.same && 'bg-rose-50/60')}>
-                    <Td className="font-medium text-xs">{d.field}</Td>
-                    <Td className={cx('text-sm', !d.same && 'text-rose-700 font-semibold')}>{d.money && !seeMoney ? <span className="inline-flex items-center gap-1 text-xs text-slate-400"><Lock className="w-3 h-3" />Terbatas</span> : d.spk}</Td>
-                    <Td className="text-sm text-slate-600">{d.money && !seeMoney ? <span className="inline-flex items-center gap-1 text-xs text-slate-400"><Lock className="w-3 h-3" />Terbatas</span> : d.fpk}</Td>
+                  <Tr key={i} tone={!d.same ? 'red' : undefined}>
+                    <Td className="font-medium">{d.field}</Td>
+                    <Td className={cx(!d.same && 'text-rose-700 font-semibold')}>{d.money && !seeMoney ? <span className="inline-flex items-center gap-1 text-slate-400"><Lock className="w-3 h-3" />Terbatas</span> : d.spk}</Td>
+                    <Td className="text-slate-600">{d.money && !seeMoney ? <span className="inline-flex items-center gap-1 text-slate-400"><Lock className="w-3 h-3" />Terbatas</span> : d.fpk}</Td>
                     <Td>{d.same ? <Badge tone="green">Sama</Badge> : <Badge tone="red">Beda</Badge>}</Td>
-                  </tr>
+                  </Tr>
                 ))}
               </Table>
             </Card>
@@ -127,12 +127,12 @@ export const SpkDetailPage: React.FC<{ id: string }> = ({ id }) => {
               {s.lines.map(l => {
                 const fl = f?.versions.flatMap(v => v.lines).find(x => x.id === l.fpkLineId);
                 return (
-                  <tr key={l.id}>
+                  <Tr key={l.id}>
                     <Td className="font-medium">{lookups.position.get(l.positionId)?.name}</Td>
                     <Td className="tabular-nums">{l.qty}</Td>
                     <Td>{l.shift}</Td>
-                    <Td className="text-xs">{fl ? `${lookups.position.get(fl.positionId)?.name} · ${fl.shift} · ${fl.qty} orang` : '–'}</Td>
-                  </tr>
+                    <Td>{fl ? `${lookups.position.get(fl.positionId)?.name} · ${fl.shift} · ${fl.qty} orang` : '–'}</Td>
+                  </Tr>
                 );
               })}
             </Table>

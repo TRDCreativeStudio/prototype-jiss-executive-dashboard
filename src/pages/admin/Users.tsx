@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Pencil, Send } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { Badge, Btn, Card, ErrorText, Field, Input, Modal, PageHeader, SearchBox, Table, Td, runAction, toast } from '../../ui/kit';
+import { Badge, Btn, Card, ErrorText, Field, Input, Modal, PageHeader, SearchBox, Table, Td, runAction, toast, Tr } from '../../ui/kit';
 import { ROLES, type Role, type User } from '../../domain/types';
 import { isDeputy } from '../../domain/rbac';
 import { muted } from '../master/common';
@@ -74,10 +74,10 @@ export const UsersPage: React.FC = () => {
       <Card pad={false}>
         <Table head={['Nama', 'Peran', 'Kepala divisi', 'Lingkup area', 'Status', '']}>
           {rows.map(u => (
-            <tr key={u.id} className={muted(u.active)}>
+            <Tr key={u.id} muted={!u.active}>
               <Td>
                 <div className="font-semibold">{u.name}</div>
-                <div className="text-xs text-slate-500">{u.email} · {u.title}</div>
+                <div className="text-[13px] text-slate-500 mt-0.5">{u.email} · {u.title}</div>
               </Td>
               <Td>
                 <div className="flex flex-wrap gap-1">
@@ -85,8 +85,8 @@ export const UsersPage: React.FC = () => {
                   {isDeputy(u, state.delegations) && <Badge tone="violet">Wakil BOD</Badge>}
                 </div>
               </Td>
-              <Td className="text-xs">{u.headOf.join(', ') || '–'}</Td>
-              <Td className="text-xs">{u.areaIds.length ? u.areaIds.map(a => lookups.area.get(a)?.name).join(', ') : (u.roles.some(r => r === 'PIC Area' || r === 'Operasional') ? '–' : 'Semua')}</Td>
+              <Td>{u.headOf.join(', ') || '–'}</Td>
+              <Td>{u.areaIds.length ? u.areaIds.map(a => lookups.area.get(a)?.name).join(', ') : (u.roles.some(r => r === 'PIC Area' || r === 'Operasional') ? '–' : 'Semua')}</Td>
               <Td>{u.active ? <Badge tone="green">Aktif</Badge> : <Badge>Nonaktif</Badge>}</Td>
               <Td>
                 {editable && (
@@ -96,7 +96,7 @@ export const UsersPage: React.FC = () => {
                   </div>
                 )}
               </Td>
-            </tr>
+            </Tr>
           ))}
         </Table>
       </Card>

@@ -42,3 +42,18 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
 }
+
+/* Drawer / side panel: geser dari kanan, ease-in-out */
+@keyframes drawer-in { from { transform: translateX(100%); } to { transform: translateX(0); } }
+@keyframes drawer-out { from { transform: translateX(0); } to { transform: translateX(100%); } }
+@keyframes backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes backdrop-out { from { opacity: 1; } to { opacity: 0; } }
+
+.drawer-panel { animation: drawer-in 280ms ease-in-out both; }
+.drawer-panel[data-closing="true"] { animation: drawer-out 220ms ease-in-out both; }
+.drawer-backdrop { animation: backdrop-in 280ms ease-in-out both; }
+.drawer-backdrop[data-closing="true"] { animation: backdrop-out 220ms ease-in-out both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .drawer-panel, .drawer-backdrop { animation: none !important; }
+}

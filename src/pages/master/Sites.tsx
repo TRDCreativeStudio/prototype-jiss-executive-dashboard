@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Pencil } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { Btn, Card, DL, ErrorText, ExportBtn, Field, Input, Modal, PageHeader, SearchBox, Select, Table, Td, Textarea, exportCsv, runAction } from '../../ui/kit';
+import { Btn, Card, DL, ErrorText, ExportBtn, Field, Input, Modal, PageHeader, SearchBox, Select, Table, Td, Textarea, exportCsv, runAction, Tr, CellMain, CellCode } from '../../ui/kit';
 import { Link } from '../../router';
 import { ActiveBadge, FpkMiniTable, QuotaTable, SpkMiniTable, muted, runningIn } from './common';
 import { NotFound } from '../Misc';
@@ -76,19 +76,19 @@ export const SitesPage: React.FC = () => {
       <Card pad={false}>
         <Table head={['Kode', 'Site', 'Alamat', 'Klien', 'Area', 'Status', '']}>
           {rows.map(s => (
-            <tr key={s.id} className={muted(s.active)}>
-              <Td className="font-mono text-xs">{s.code}</Td>
+            <Tr key={s.id} to={`/site/${s.id}`} muted={!s.active}>
+              <Td><CellCode>{s.code}</CellCode></Td>
               <Td>
-                <Link to={`/site/${s.id}`} className="font-semibold text-indigo-700 hover:underline">{s.name}</Link>
+                <CellMain>{s.name}</CellMain>
               </Td>
               <Td>
                 <div className="text-sm text-slate-600 max-w-sm">{s.address}</div>
               </Td>
-              <Td><Link to={`/klien/${s.clientId}`} className="hover:underline">{lookups.client.get(s.clientId)?.name}</Link></Td>
-              <Td><Link to={`/area/${s.areaId}`} className="hover:underline">{lookups.area.get(s.areaId)?.name}</Link></Td>
+              <Td>{lookups.client.get(s.clientId)?.name}</Td>
+              <Td>{lookups.area.get(s.areaId)?.name}</Td>
               <Td><ActiveBadge active={s.active} /></Td>
               <Td>{editable && <Btn size="sm" variant="ghost" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => setEdit(s)}>Ubah</Btn>}</Td>
-            </tr>
+            </Tr>
           ))}
         </Table>
       </Card>

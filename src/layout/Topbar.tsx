@@ -40,8 +40,8 @@ export const Topbar: React.FC<{ onMenu: () => void }> = ({ onMenu }) => {
           <Menu className="w-5 h-5" />
         </button>
         <div className="relative" ref={dateRef}>
-          <button onClick={() => setDateOpen(o => !o)} className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-300 bg-slate-950 hover:bg-slate-900 border border-slate-800 rounded-md px-2.5 py-1" aria-label="Kontrol tanggal simulasi">
-            <CalendarDays className="w-3.5 h-3.5 text-amber-400" /> <span className="hidden sm:inline text-slate-300">Tanggal simulasi:</span> <span className="font-semibold text-amber-300">{fmtDate(TODAY)}</span> <ChevronDown className="w-3 h-3 text-slate-400" />
+          <button onClick={() => setDateOpen(o => !o)} className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-md px-2.5 py-1 transition-colors" aria-label="Kontrol tanggal simulasi">
+            <CalendarDays className="w-3.5 h-3.5 text-slate-400" /> <span className="hidden sm:inline text-slate-500">Tanggal simulasi:</span> <span className="font-semibold text-slate-700">{fmtDate(TODAY)}</span> <ChevronDown className="w-3 h-3 text-slate-400" />
           </button>
           {dateOpen && (
             <div className="absolute left-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden z-40">

@@ -48,7 +48,7 @@ const financeVerifier = (tx: Tx, s: Spk) => {
 };
 
 export function buildSpkActions(exec: (fn: (tx: Tx) => Result) => Result) {
-  const inputSpk = (input: SpkInput, reviseId?: string) => exec(tx => {
+  const inputSpk = (input: SpkInput, reviseId?: string, draftId?: string) => exec(tx => {
     if (!has(tx.me, 'Marketing')) return fail('Hanya Marketing yang menginput SPK.');
     const parent = input.parentSpkId ? tx.s.spks.find(x => x.id === input.parentSpkId) : undefined;
     // Perpanjangan mengikuti FPK SPK induknya (bila ada); isi dibandingkan dengan SPK induk dan memo yang disetujui klien.
@@ -95,6 +95,8 @@ export function buildSpkActions(exec: (fn: (tx: Tx) => Result) => Result) {
       tx.s.spks.unshift(s);
       tx.audit({ entity: 'spk', entityId: s.id, action: 'SPK diinput', after: s.number });
     }
+    // Draft yang sudah dikirim tidak perlu disimpan lagi
+    if (draftId) tx.s.spkDrafts = tx.s.spkDrafts.filter(d => d.id !== draftId);
     if (input.type === 'perpanjangan' && input.parentSpkId) tx.closeTasks(t => t.refId === input.parentSpkId && (t.kind === 'input_spk_perpanjangan' || t.kind === 'spk_berakhir_jaga'));
     tx.addTask({
       kind: 'verifikasi_spk', title: `Verifikasi ${s.number} — ${tx.s.clients.find(c => c.id === s.clientId)?.name}`, refType: 'spk', refId: s.id,
@@ -204,7 +206,28 @@ export function buildSpkActions(exec: (fn: (tx: Tx) => Result) => Result) {
     return ok();
   });
 
-  return { inputSpk, verifySpk, billAsIs };
+  /** Simpan isian form Input SPK sebagai draft (tanpa validasi; belum dikirim ke Finance). */
+  const saveSpkDraft = (input: SpkInput, draftId?: string) => exec(tx => {
+    if (!has(tx.me, 'Marketing')) return fail('Hanya Marketing yang menyimpan draft SPK.');
+    const existing = draftId ? tx.s.spkDrafts.find(d => d.id === draftId) : undefined;
+    if (existing) {
+      existing.input = input;
+      existing.updatedAt = TODAY;
+      return ok(existing.id);
+    }
+    const id = tx.id('sd');
+    tx.s.spkDrafts.unshift({ id, createdBy: tx.me.id, updatedAt: TODAY, input });
+    return ok(id);
+  });
+
+  const deleteSpkDraft = (draftId: string) => exec(tx => {
+    const d = tx.s.spkDrafts.find(x => x.id === draftId);
+    if (!d || d.createdBy !== tx.me.id) return fail('Draft tidak ditemukan.');
+    tx.s.spkDrafts = tx.s.spkDrafts.filter(x => x.id !== draftId);
+    return ok();
+  });
+
+  return { inputSpk, verifySpk, billAsIs, saveSpkDraft, deleteSpkDraft };
 }
 
 export const spkSummary = (s: Spk) => `${s.number} · ${fmtDate(s.periodStart)}–${fmtDate(s.periodEnd)} · ${fmtRp(s.monthlyValue)}`;

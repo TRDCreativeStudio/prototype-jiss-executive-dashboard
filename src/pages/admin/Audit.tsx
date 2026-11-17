@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Lock } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { Card, Input, PageHeader, Select, Table, Td } from '../../ui/kit';
+import { Card, Input, PageHeader, Select, Table, Td, Tr, TableEmpty } from '../../ui/kit';
 import { fmtDateTime } from '../../domain/time';
 
 export const AuditPage: React.FC = () => {
@@ -36,20 +36,20 @@ export const AuditPage: React.FC = () => {
       <Card pad={false}>
         <Table head={['Waktu', 'Oleh', 'Entitas', 'Aksi', 'Sebelum', 'Sesudah']}>
           {rows.map(a => (
-            <tr key={a.id}>
-              <Td className="whitespace-nowrap text-xs">{fmtDateTime(a.at)}</Td>
-              <Td className="text-xs">
+            <Tr key={a.id}>
+              <Td className="whitespace-nowrap">{fmtDateTime(a.at)}</Td>
+              <Td>
                 {lookups.user.get(a.actorId)?.name ?? (a.actorId === 'sistem' ? 'Sistem (job harian)' : a.actorId)}
                 {a.onBehalfOfId && <div className="text-slate-500">atas nama {lookups.user.get(a.onBehalfOfId)?.name}</div>}
               </Td>
-              <Td className="text-xs"><span className="font-semibold">{a.entity}</span><div className="font-mono text-slate-400">{a.entityId}</div></Td>
+              <Td><span className="font-semibold">{a.entity}</span><div className="font-mono text-slate-400">{a.entityId}</div></Td>
               <Td className="text-sm">{a.action}</Td>
-              <Td className="text-xs text-slate-600">{val(a.before, a.hasMoney)}</Td>
-              <Td className="text-xs text-slate-600">{val(a.after, a.hasMoney)}</Td>
-            </tr>
+              <Td className="text-slate-600">{val(a.before, a.hasMoney)}</Td>
+              <Td className="text-slate-600">{val(a.after, a.hasMoney)}</Td>
+            </Tr>
           ))}
         </Table>
-        {rows.length === 0 && <p className="text-sm text-slate-500 p-4">Tidak ada catatan.</p>}
+        {rows.length === 0 && <TableEmpty>Tidak ada catatan.</TableEmpty>}
       </Card>
     </div>
   );

@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import type {
   Area, AuditEntry, Client, Delegation, Fpk, Holiday, Memo, Notification, Personnel, Position,
-  Setting, Site, SiteAssignment, Spk, Task, User, RefType,
+  Setting, Site, SiteAssignment, Spk, SpkDraft, Task, User, RefType,
 } from '../domain/types';
 import * as seed from '../domain/seed';
 import { NOW, SEED_TODAY, setToday } from '../domain/time';
@@ -26,6 +26,7 @@ export interface State {
   delegations: Delegation[];
   fpks: Fpk[];
   spks: Spk[];
+  spkDrafts: SpkDraft[];
   memos: Memo[];
   personnel: Personnel[];
   tasks: Task[];
@@ -49,6 +50,7 @@ const initialState = (): State => ({
   delegations: seed.SEED_DELEGATIONS,
   fpks: seed.SEED_FPKS,
   spks: seed.SEED_SPKS,
+  spkDrafts: seed.SEED_SPK_DRAFTS,
   memos: seed.SEED_MEMOS,
   personnel: seed.SEED_PERSONNEL,
   tasks: seed.SEED_TASKS,

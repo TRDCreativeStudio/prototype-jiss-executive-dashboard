@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle, Pencil, Send, FilePlus2, Ban, Undo2, TrendingDown, Search, Timer } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { AttachmentChip, Badge, Btn, Card, DL, Money, PageHeader, Table, Td, cx, toast } from '../../ui/kit';
+import { AttachmentChip, Badge, Btn, Card, DL, Money, PageHeader, Table, Td, cx, toast, Tr, CellMain, CellSub, TableEmpty } from '../../ui/kit';
 import { ReasonModal } from '../../ui/ReasonModal';
 import { Link, navigate } from '../../router';
 import { NotFound } from '../Misc';
@@ -144,20 +144,20 @@ export const FpkDetailPage: React.FC<{ id: string }> = ({ id }) => {
               {v.lines.map(l => {
                 const c = cov.lines.find(x => x.line.id === l.id);
                 return (
-                  <tr key={l.id}>
+                  <Tr key={l.id}>
                     <Td>
                       <div className="font-medium text-slate-800">{lookups.position.get(l.positionId)?.name}</div>
-                      {l.notes && <div className="text-xs text-slate-500 font-normal mt-0.5">Catatan: {l.notes}</div>}
+                      {l.notes && <CellSub>Catatan: {l.notes}</CellSub>}
                     </Td>
                     <Td className="tabular-nums">{l.qty}</Td>
                     <Td>{l.shift}</Td>
-                    <Td className="text-xs">
+                    <Td>
                       {l.sources.length ? l.sources.map((s, i) => (
                         <div key={i}>{s.qty} · {SOURCE_LABEL[s.kind]}{s.kind === 'mutasi' && ` dari ${lookups.area.get(s.fromAreaId ?? '')?.name}${s.fromSiteId ? ` (${lookups.site.get(s.fromSiteId)?.name})` : ''}`}</div>
                       )) : <span className="text-slate-400">Diisi Recruitment saat cek</span>}
                     </Td>
                     {spks.length > 0 && <Td><Badge tone={c && c.covered >= l.qty ? 'green' : c?.covered ? 'amber' : 'slate'}>{c?.covered ?? 0}/{l.qty}</Badge></Td>}
-                  </tr>
+                  </Tr>
                 );
               })}
             </Table>
@@ -169,16 +169,16 @@ export const FpkDetailPage: React.FC<{ id: string }> = ({ id }) => {
             <Card title={`SPK terkait (${spks.length})`} pad={false} actions={has(me, 'Marketing') && isOwner && ['berjalan', 'tertutup_sebagian', 'disetujui'].includes(f.status) && <Btn size="sm" onClick={() => navigate(`/spk/input?fpk=${f.id}`)}>Input SPK</Btn>}>
               <Table head={['Nomor', 'Status', 'Periode', 'Orang', 'Nilai/bulan']}>
                 {spks.map(s => (
-                  <tr key={s.id}>
-                    <Td><Link to={`/spk/${s.id}`} className="font-semibold text-indigo-700 hover:underline">{s.number}</Link></Td>
+                  <Tr key={s.id} to={`/spk/${s.id}`}>
+                    <Td><CellMain>{s.number}</CellMain></Td>
                     <Td><Badge tone={SPK_STATUS[s.status].tone}>{SPK_STATUS[s.status].label}</Badge>{s.invoiceHeld && <Badge tone="red" className="ml-1">invoice ditahan</Badge>}</Td>
-                    <Td className="text-xs whitespace-nowrap">{fmtDate(s.periodStart)} – {fmtDate(s.periodEnd)}</Td>
+                    <Td className="whitespace-nowrap">{fmtDate(s.periodStart)} – {fmtDate(s.periodEnd)}</Td>
                     <Td className="tabular-nums">{s.lines.reduce((n, l) => n + l.qty, 0)}</Td>
                     <Td><Money value={s.monthlyValue} clientId={s.clientId} /></Td>
-                  </tr>
+                  </Tr>
                 ))}
               </Table>
-              {spks.length === 0 && <p className="text-sm text-slate-500 p-4">Belum ada SPK.</p>}
+              {spks.length === 0 && <TableEmpty>Belum ada SPK.</TableEmpty>}
               {spks.length > 0 && <p className="text-xs text-slate-500 px-4 py-3 border-t border-slate-100">Kuota tertutup SPK aktif: {cov.done} dari {cov.total} orang.</p>}
               {f.startedAt && spks.filter(s => s.type !== 'perpanjangan' && ['aktif', 'berakhir'].includes(s.status) && diffDays(f.startedAt!, s.periodStart) > 0).map(s => (
                 <p key={s.id} className="text-xs text-amber-800 bg-amber-50 px-4 py-2 border-t border-amber-100">

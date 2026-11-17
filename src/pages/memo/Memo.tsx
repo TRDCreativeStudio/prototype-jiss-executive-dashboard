@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Send, CheckCircle2, ThumbsUp, Undo2, TrendingDown, Plus, Paperclip, Trash2, Handshake, XCircle, MessageSquare } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { AttachmentChip, Badge, Btn, Card, DL, ErrorText, Field, Input, Money, PageHeader, Table, Tabs, Td, cx, toast, DateInput } from '../../ui/kit';
+import { AttachmentChip, Badge, Btn, Card, DL, ErrorText, Field, Input, Money, PageHeader, Table, Tabs, Td, Tr, CellMain, CellSub, CellCode, TableEmpty, cx, toast, DateInput } from '../../ui/kit';
 import { ReasonModal } from '../../ui/ReasonModal';
 import { Link, navigate } from '../../router';
 import { NotFound } from '../Misc';
@@ -57,25 +57,23 @@ export const MemoListPage: React.FC = () => {
     <div>
       <PageHeader title="Memo eksternal" subtitle="Keputusan perpanjang atau akhiri harus selesai sekitar dua bulan sebelum SPK habis: tugas di H-75, terkirim paling lambat H-60, dijawab paling lambat H-30." />
       <Card title={`SPK masuk H-${startDays} tanpa memo (${due.length})`} pad={false} className="mb-5">
-        <Table head={['SPK', 'Klien / site', 'Berakhir', 'Batas kirim (H-60)', '']}>
+        <Table head={['No. SPK', 'Klien', 'Site', 'Berakhir', 'Batas kirim (H-60)', '']}>
           {due.map(s => {
             const d = dates(s.periodEnd);
             const late = diffDays(d.send, TODAY) > 0;
             return (
-              <tr key={s.id} className={late ? 'bg-rose-50/60' : ''}>
-                <Td>
-                  <Link to={`/spk/${s.id}`} className="font-semibold text-indigo-700 hover:underline whitespace-nowrap">{s.number}</Link>
-                  {s.isInitialData && <div><Badge className="mt-1">data awal hampir habis</Badge></div>}
-                </Td>
-                <Td><div className="font-medium">{lookups.client.get(s.clientId)?.name}</div><div className="text-xs text-slate-500">{lookups.site.get(s.siteId)?.name}</div></Td>
-                <Td className="whitespace-nowrap">{fmtDate(s.periodEnd)}<div className="text-xs text-slate-500">{diffDays(TODAY, s.periodEnd)} hari lagi</div></Td>
-                <Td className={cx('whitespace-nowrap', late && 'text-rose-600 font-semibold')}>{fmtDate(d.send)}{late && <div className="text-xs">lewat, eskalasi BOD</div>}</Td>
-                <Td>{has(me, 'Marketing') && isMine(s.clientId) && <Btn size="sm" onClick={() => navigate(`/memo/baru?spk=${s.id}`)}>Pilih jenis memo</Btn>}</Td>
-              </tr>
+              <Tr key={s.id} to={`/spk/${s.id}`} tone={late ? 'red' : undefined}>
+                <Td><CellCode>{s.number}</CellCode></Td>
+                <Td><CellMain>{lookups.client.get(s.clientId)?.name}</CellMain></Td>
+                <Td>{lookups.site.get(s.siteId)?.name}</Td>
+                <Td className="whitespace-nowrap">{fmtDate(s.periodEnd)}<CellSub>{diffDays(TODAY, s.periodEnd)} hari lagi</CellSub></Td>
+                <Td className={cx('whitespace-nowrap', late && 'text-rose-600 font-semibold')}>{fmtDate(d.send)}{late && <CellSub className="text-rose-600">lewat, eskalasi BOD</CellSub>}</Td>
+                <Td className="text-right">{has(me, 'Marketing') && isMine(s.clientId) && <Btn size="sm" onClick={() => navigate(`/memo/baru?spk=${s.id}`)}>Pilih jenis memo</Btn>}</Td>
+              </Tr>
             );
           })}
         </Table>
-        {due.length === 0 && <p className="text-sm text-slate-500 p-4">Tidak ada.</p>}
+        {due.length === 0 && <TableEmpty>Tidak ada SPK yang perlu memo.</TableEmpty>}
       </Card>
       <Tabs value={tab} onChange={setTab} tabs={[
         { key: 'berjalan', label: `Berjalan (${memos.filter(m => m.status !== 'dijawab').length})` },
@@ -83,32 +81,33 @@ export const MemoListPage: React.FC = () => {
         { key: 'semua', label: 'Semua' },
       ]} />
       <Card pad={false}>
-        <Table head={['Memo', 'SPK / klien', 'Jenis', 'Status', 'Nilai baru', 'Tenggat']}>
+        <Table head={['No. memo', 'SPK', 'Klien', 'Jenis', 'Status', 'Nilai baru', 'Tenggat']}>
           {rows.map(m => {
             const s = lookups.spk.get(m.spkId)!;
             const d = dates(s.periodEnd);
             const v = m.versions[m.versions.length - 1];
             return (
-              <tr key={m.id}>
+              <Tr key={m.id} to={`/memo/${m.id}`}>
                 <Td>
-                  <Link to={`/memo/${m.id}`} className="font-semibold text-indigo-700 hover:underline whitespace-nowrap">{m.number ?? 'Draf (nomor keluar saat disetujui)'}</Link>
-                  {m.parentMemoId && <div className="text-xs text-slate-500">nego atas {lookups.memo.get(m.parentMemoId)?.number}</div>}
+                  {m.number ? <CellCode>{m.number}</CellCode> : <span className="text-slate-500">Draf</span>}
+                  {m.parentMemoId && <CellSub>nego atas {lookups.memo.get(m.parentMemoId)?.number}</CellSub>}
                 </Td>
-                <Td><div className="text-sm">{s.number}</div><div className="text-xs text-slate-500">{lookups.client.get(s.clientId)?.name}</div></Td>
-                <Td className="text-xs">{MEMO_TYPE[m.type]}</Td>
+                <Td><CellCode>{s.number}</CellCode></Td>
+                <Td><CellMain>{lookups.client.get(s.clientId)?.name}</CellMain></Td>
+                <Td>{MEMO_TYPE[m.type]}</Td>
                 <Td>
                   <Badge tone={MEMO_STATUS[m.status].tone}>{MEMO_STATUS[m.status].label}</Badge>
-                  {m.clientAnswer && <div className="text-xs mt-1">{m.clientAnswer === 'setuju' ? 'Klien setuju' : m.clientAnswer === 'nego' ? 'Klien nego' : 'Tidak lanjut'}</div>}
+                  {m.clientAnswer && <CellSub>{m.clientAnswer === 'setuju' ? 'Klien setuju' : m.clientAnswer === 'nego' ? 'Klien nego' : 'Tidak lanjut'}</CellSub>}
                 </Td>
-                <Td>{m.type.startsWith('perpanjangan') ? <Money value={v.newValue} clientId={s.clientId} /> : '–'}</Td>
-                <Td className="text-xs whitespace-nowrap">
+                <Td className="whitespace-nowrap">{m.type.startsWith('perpanjangan') ? <Money value={v.newValue} clientId={s.clientId} /> : '–'}</Td>
+                <Td className="whitespace-nowrap">
                   {m.status === 'terkirim' ? <>Jawaban: {fmtDate(d.answer)}</> : m.status === 'dijawab' ? '–' : <>Kirim: {fmtDate(d.send)}</>}
                 </Td>
-              </tr>
+              </Tr>
             );
           })}
         </Table>
-        {rows.length === 0 && <p className="text-sm text-slate-500 p-4">Tidak ada memo.</p>}
+        {rows.length === 0 && <TableEmpty>Tidak ada memo.</TableEmpty>}
       </Card>
     </div>
   );
@@ -326,13 +325,13 @@ export const MemoDetailPage: React.FC<{ id: string }> = ({ id }) => {
           <Card title={`Riwayat versi draf (${m.versions.length})`} pad={false}>
             <Table head={['Versi', 'Nilai baru', 'BOQ', 'Margin', 'Keputusan BOD']}>
               {m.versions.map(x => (
-                <tr key={x.no}>
-                  <Td>v{x.no}<div className="text-xs text-slate-500">{fmtDateTime(x.createdAt)}</div></Td>
+                <Tr key={x.no}>
+                  <Td><CellMain>v{x.no}</CellMain><CellSub>{fmtDateTime(x.createdAt)}</CellSub></Td>
                   <Td>{extend ? <Money value={x.newValue} clientId={s.clientId} /> : '–'}</Td>
                   <Td>{x.boq ? <AttachmentChip a={x.boq} clientId={s.clientId} entity="memo" entityId={m.id} /> : '–'}</Td>
                   <Td>{x.marginPct !== undefined && access.money(s.clientId) ? `${x.marginPct.toLocaleString('id-ID')}%` : '–'}</Td>
-                  <Td className="text-xs">{x.bodDecision ? <>{x.bodDecision.decision === 'setujui' ? 'Disetujui' : 'Dikembalikan'} oleh {lookups.user.get(x.bodDecision.by)?.name}{x.bodDecision.onBehalfOf && ' (atas nama BOD)'}{x.bodDecision.note && `: ${x.bodDecision.note}`}</> : '–'}</Td>
-                </tr>
+                  <Td>{x.bodDecision ? <>{x.bodDecision.decision === 'setujui' ? 'Disetujui' : 'Dikembalikan'} oleh {lookups.user.get(x.bodDecision.by)?.name}{x.bodDecision.onBehalfOf && ' (atas nama BOD)'}{x.bodDecision.note && `: ${x.bodDecision.note}`}</> : '–'}</Td>
+                </Tr>
               ))}
             </Table>
           </Card>

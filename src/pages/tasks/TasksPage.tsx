@@ -133,7 +133,11 @@ const REASON: Record<TaskReason, string | null> = {
 };
 
 export const TaskCard: React.FC<{ task: Task; reason: TaskReason; esc: Escalation }> = ({ task, reason, esc }) => {
-  const { lookups, me, taskCtx } = useStore();
+  const { lookups, me, taskCtx, state } = useStore();
+  // Kejar SPK: bila SPK sudah diinput dan menunggu Finance, Marketing tidak perlu input lagi
+  const pendingSpk = task.kind === 'kejar_spk'
+    ? state.spks.find(s => s.fpkId === task.refId && s.status === 'diinput')
+    : undefined;
   const [modal, setModal] = useState<'done' | 'move' | 'intervene' | null>(null);
   const escalated = reason === 'eskalasi-kepala' || reason === 'eskalasi-bod';
   const taskArea = taskCtx.areaOf(task);
@@ -145,7 +149,8 @@ export const TaskCard: React.FC<{ task: Task; reason: TaskReason; esc: Escalatio
   const daysLeft = diffDays(TODAY, task.dueAt);
   const canMove = task.assigneeRole !== 'BOD' && (reason === 'eskalasi-kepala' || reason === 'eskalasi-bod' || me.headOf.includes(escalationHeadRole(task.assigneeRole)) || me.roles.includes('BOD'));
   const owner = task.assigneeUserId ? lookups.user.get(task.assigneeUserId)?.name : `semua ${task.assigneeRole}`;
-  const target = task.kind === 'kejar_spk' ? `/spk/input?fpk=${task.refId}`
+  const target = pendingSpk ? `/spk/${pendingSpk.id}`
+    : task.kind === 'kejar_spk' ? `/spk/input?fpk=${task.refId}`
     : task.kind === 'urus_spk_salah' ? `/spk/${task.refId}/revisi`
     : task.kind === 'memo' && task.refType === 'spk' ? `/memo/baru?spk=${task.refId}`
     : task.kind === 'input_spk_perpanjangan' || task.kind === 'spk_berakhir_jaga' ? `/spk/input?induk=${task.refId}`
@@ -159,6 +164,11 @@ export const TaskCard: React.FC<{ task: Task; reason: TaskReason; esc: Escalatio
           {esc.label && <Badge tone="red"><AlertTriangle className="w-3 h-3" />{esc.label}</Badge>}
         </div>
         <div className="text-sm font-semibold text-slate-900">{task.title}</div>
+        {pendingSpk && (
+          <div className="text-xs text-slate-600 mt-1">
+            {pendingSpk.number} sudah diinput · menunggu verifikasi Finance
+          </div>
+        )}
         {task.interventions?.map((x, i) => (
           <div key={i} className="text-xs text-violet-800 bg-violet-50 rounded-md px-2 py-1 mt-1.5">
             Turun tangan {lookups.user.get(x.by)?.name}: {x.note} · target baru {fmtDate(x.newDue)}
@@ -179,8 +189,8 @@ export const TaskCard: React.FC<{ task: Task; reason: TaskReason; esc: Escalatio
         {escalated && <Btn size="sm" variant="secondary" icon={<Hand className="w-3.5 h-3.5" />} onClick={() => setModal('intervene')}>Turun tangan</Btn>}
         {canAct && MANUAL_KINDS.includes(task.kind) && <Btn size="sm" variant="success" icon={<CheckSquare className="w-3.5 h-3.5" />} onClick={() => setModal('done')}>Selesaikan</Btn>}
         {canAct
-          ? <Btn size="sm" variant={MANUAL_KINDS.includes(task.kind) || notYet ? 'secondary' : 'primary'} onClick={() => navigate(target)} icon={<ArrowRight className="w-3.5 h-3.5" />}>
-            {notYet ? `Mulai ${fmtDate(latest(startFpk!).plannedStart)}` : ACTION_LABEL[task.kind] ?? 'Buka'}
+          ? <Btn size="sm" variant={MANUAL_KINDS.includes(task.kind) || notYet || pendingSpk ? 'secondary' : 'primary'} onClick={() => navigate(target)} icon={<ArrowRight className="w-3.5 h-3.5" />}>
+            {notYet ? `Mulai ${fmtDate(latest(startFpk!).plannedStart)}` : pendingSpk ? 'Lihat SPK' : ACTION_LABEL[task.kind] ?? 'Buka'}
           </Btn>
           : <Btn size="sm" variant="secondary" onClick={() => navigate(refLink(task))} icon={<Eye className="w-3.5 h-3.5" />}>Lihat dokumen</Btn>}
       </div>

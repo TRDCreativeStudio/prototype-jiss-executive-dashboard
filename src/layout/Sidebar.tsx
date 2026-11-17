@@ -1,10 +1,10 @@
 import React from 'react';
 import {
-  ListChecks, Gavel, FileText, FileCheck2, Timer, Mail, MapPinned, Building2, MapPin, Briefcase,
+  ListChecks, Gavel, Plus, FileText, FileCheck2, Timer, Mail, MapPinned, Building2, MapPin, Briefcase,
   Users, UserCog, Network, Settings, ShieldCheck, History, LayoutDashboard, X, Layers, FolderKanban,
 } from 'lucide-react';
 import { useStore } from '../store/store';
-import { Link, usePath } from '../router';
+import { Link, usePath, navigate } from '../router';
 import { cx } from '../ui/kit';
 import type { Perm } from '../domain/rbac';
 
@@ -79,6 +79,16 @@ export const Sidebar: React.FC<{ open: boolean; onClose: () => void }> = ({ open
         </button>
       </div>
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+        {/* Aksi cepat Marketing: buat FPK dari halaman mana pun */}
+        {access.can('fpk.create') && (
+          <button
+            type="button"
+            onClick={() => { navigate('/fpk/baru'); onClose(); }}
+            className="w-full h-9 flex items-center justify-center gap-1.5 rounded-lg border border-amber-400/70 text-amber-300 hover:bg-amber-400 hover:text-slate-950 text-[13px] font-semibold transition-colors"
+          >
+            <Plus className="w-4 h-4" /> Buat FPK
+          </button>
+        )}
         {groups.map(g => {
           const items = g.items.filter(i => access.can(i.perm));
           if (!items.length) return null;

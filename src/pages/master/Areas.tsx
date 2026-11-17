@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Pencil } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { Btn, Card, DL, ErrorText, ExportBtn, Field, Input, Modal, PageHeader, SearchBox, Select, Table, Td, Textarea, exportCsv, runAction, Badge } from '../../ui/kit';
+import { Btn, Card, DL, ErrorText, ExportBtn, Field, Input, Modal, PageHeader, SearchBox, Select, Table, Td, Textarea, exportCsv, runAction, Badge, Tr, CellMain, CellCode } from '../../ui/kit';
 import { Link } from '../../router';
 import { ActiveBadge, FpkMiniTable, QuotaTable, SpkMiniTable, muted, runningIn } from './common';
 import { NotFound } from '../Misc';
@@ -76,12 +76,12 @@ export const AreasPage: React.FC = () => {
           {rows.map(a => {
             const st = stats(a);
             return (
-              <tr key={a.id} className={muted(a.active)}>
-                <Td className="font-mono text-xs">{a.code}</Td>
-                <Td><Link to={`/area/${a.id}`} className="font-semibold text-indigo-700 hover:underline">{a.name}</Link></Td>
+              <Tr key={a.id} to={`/area/${a.id}`} muted={!a.active}>
+                <Td><CellCode>{a.code}</CellCode></Td>
+                <Td><CellMain>{a.name}</CellMain></Td>
                 <Td>
-                  <div>{lookups.user.get(a.picUserId ?? '')?.name ?? <span className="text-rose-600 text-xs font-semibold">Belum ada PIC</span>}</div>
-                  {a.backupPicUserId && <div className="text-xs text-slate-500">Cadangan: {lookups.user.get(a.backupPicUserId)?.name}</div>}
+                  <div>{lookups.user.get(a.picUserId ?? '')?.name ?? <span className="text-rose-600 font-semibold">Belum ada PIC</span>}</div>
+                  {a.backupPicUserId && <div className="text-[13px] text-slate-500 mt-0.5">Cadangan: {lookups.user.get(a.backupPicUserId)?.name}</div>}
                 </Td>
                 <Td className="tabular-nums">{st.sites} site · {st.clients} klien</Td>
                 <Td className="tabular-nums">
@@ -90,7 +90,7 @@ export const AreasPage: React.FC = () => {
                 </Td>
                 <Td><ActiveBadge active={a.active} /></Td>
                 <Td>{editable && <Btn size="sm" variant="ghost" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => setEdit(a)}>Ubah</Btn>}</Td>
-              </tr>
+              </Tr>
             );
           })}
         </Table>
@@ -131,12 +131,12 @@ export const AreaDetail: React.FC<{ id: string }> = ({ id }) => {
         <Table head={['Klien', 'Site', 'Alamat', 'Status']}>
           {byClient.flatMap(cid =>
             sites.filter(s => s.clientId === cid).map((s, i) => (
-              <tr key={s.id} className={muted(s.active)}>
-                <Td>{i === 0 && <Link to={`/klien/${cid}`} className="font-semibold text-indigo-700 hover:underline">{lookups.client.get(cid)?.name}</Link>}</Td>
-                <Td><Link to={`/site/${s.id}`} className="font-medium hover:underline">{s.name}</Link></Td>
-                <Td className="text-xs text-slate-500">{s.address}</Td>
+              <Tr key={s.id} to={`/site/${s.id}`} muted={!s.active}>
+                <Td>{i === 0 && <CellMain>{lookups.client.get(cid)?.name}</CellMain>}</Td>
+                <Td><CellMain>{s.name}</CellMain></Td>
+                <Td className="text-[13px] text-slate-500">{s.address}</Td>
                 <Td><ActiveBadge active={s.active} /></Td>
-              </tr>
+              </Tr>
             )),
           )}
         </Table>

@@ -79,8 +79,22 @@ const calculateEndDate = (startDate: string, months: number): string => {
   const normalizedMonth = ((targetMonth % 12) + 12) % 12;
   const daysInMonth = new Date(Date.UTC(targetYear, normalizedMonth + 1, 0)).getUTCDate();
   const targetDay = Math.min(d, daysInMonth);
-  const date = new Date(Date.UTC(targetYear, normalizedMonth, targetDay));
+  // Kontrak berakhir sehari sebelum tanggal yang sama di bulan ke-N (1 Jan → 31 Des)
+  const date = new Date(Date.UTC(targetYear, normalizedMonth, targetDay - 1));
   return date.toISOString().slice(0, 10);
+};
+
+// Buka kalender saat area field mana pun diklik, bukan hanya ikonnya
+const openPicker = (e: React.MouseEvent<HTMLInputElement>) => {
+  try { e.currentTarget.showPicker(); } catch { /* browser lama: fallback ke perilaku bawaan */ }
+};
+
+const DURATION_PRESETS = ['6', '12', '24'] as const;
+type DurationPreset = typeof DURATION_PRESETS[number];
+
+const presetFor = (start: string, end: string): DurationPreset | null => {
+  if (!start || !end) return null;
+  return DURATION_PRESETS.find(m => end === calculateEndDate(start, Number(m))) ?? null;
 };
 
 export const FpkFormPage: React.FC<{ fpkId?: string }> = ({ fpkId }) => {
@@ -134,42 +148,25 @@ export const FpkFormPage: React.FC<{ fpkId?: string }> = ({ fpkId }) => {
   // 2 · Nilai & jadwal
   const [monthlyValue, setValue] = useState<number>(base?.monthlyValue ?? 0);
   const [periodStart, setPeriodStart] = useState(base?.periodStart ?? '');
-  const [durationPreset, setDurationPreset] = useState<'12' | '24' | 'custom' | null>(base?.periodEnd ? 'custom' : null);
+  const [durationPreset, setDurationPreset] = useState<DurationPreset | null>(presetFor(base?.periodStart ?? '', base?.periodEnd ?? ''));
   const [periodEnd, setPeriodEnd] = useState(base?.periodEnd ?? '');
   const companyEntity = PT_LIST[0];
 
-  const applyDurationPreset = (preset: '12' | '24' | 'custom') => {
+  const applyDurationPreset = (preset: DurationPreset) => {
     setDurationPreset(preset);
-    if (!periodStart) return;
-    if (preset === '12') {
-      setPeriodEnd(calculateEndDate(periodStart, 12));
-    } else if (preset === '24') {
-      setPeriodEnd(calculateEndDate(periodStart, 24));
-    }
+    if (periodStart) setPeriodEnd(calculateEndDate(periodStart, Number(preset)));
     if (errors['schedule']) setErrors(prev => ({ ...prev, schedule: '' }));
   };
 
   const handleStartDateChange = (val: string) => {
     setPeriodStart(val);
-    if (durationPreset === '12') {
-      setPeriodEnd(calculateEndDate(val, 12));
-    } else if (durationPreset === '24') {
-      setPeriodEnd(calculateEndDate(val, 24));
-    }
+    if (durationPreset) setPeriodEnd(calculateEndDate(val, Number(durationPreset)));
     if (errors['schedule']) setErrors(prev => ({ ...prev, schedule: '' }));
   };
 
   const handleEndDateChange = (val: string) => {
     setPeriodEnd(val);
-    if (periodStart) {
-      const end12 = calculateEndDate(periodStart, 12);
-      const end24 = calculateEndDate(periodStart, 24);
-      if (val === end12) setDurationPreset('12');
-      else if (val === end24) setDurationPreset('24');
-      else setDurationPreset('custom');
-    } else {
-      setDurationPreset('custom');
-    }
+    setDurationPreset(presetFor(periodStart, val));
     if (errors['schedule']) setErrors(prev => ({ ...prev, schedule: '' }));
   };
 
@@ -242,18 +239,20 @@ export const FpkFormPage: React.FC<{ fpkId?: string }> = ({ fpkId }) => {
   // Backup data sementara di localStorage secara silent
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const triggerAutosave = useCallback(() => {
+    // Hanya form FPK baru yang di-backup; versi/draf sudah punya sumber data sendiri
+    if (mode !== 'baru') return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(() => {
       try {
         const payload = {
           clientId, newClient, siteId, newSite, monthlyValue, periodStart, periodEnd, companyEntity, lines, boq, deal
         };
-        localStorage.setItem('fpk_draft_v2', JSON.stringify(payload));
+        localStorage.setItem('fpk_draft_v3', JSON.stringify(payload));
       } catch {
         // silent fail
       }
     }, 1000);
-  }, [clientId, newClient, siteId, newSite, monthlyValue, periodStart, periodEnd, companyEntity, lines, boq, deal]);
+  }, [mode, clientId, newClient, siteId, newSite, monthlyValue, periodStart, periodEnd, companyEntity, lines, boq, deal]);
 
   useEffect(() => {
     triggerAutosave();
@@ -263,7 +262,7 @@ export const FpkFormPage: React.FC<{ fpkId?: string }> = ({ fpkId }) => {
   useEffect(() => {
     if (!fpkId && !base) {
       try {
-        const saved = localStorage.getItem('fpk_draft_v2');
+        const saved = localStorage.getItem('fpk_draft_v3');
         if (saved) {
           const p = JSON.parse(saved);
           if (p.clientId && !clientId) {
@@ -365,7 +364,7 @@ export const FpkFormPage: React.FC<{ fpkId?: string }> = ({ fpkId }) => {
   const totalShifts = new Set(validLines.map(l => l.shift)).size;
 
   // Checklist 4 items
-  const check1 = Boolean((clientId || newClient) && (siteId || newSite));
+  const check1 = Boolean((clientId || newClient) && (siteId || (newSite && newSite.address.trim())));
   const check2 = Boolean(monthlyValue > 0 && periodStart && periodEnd && diffDays(periodStart, periodEnd) > 0);
   const check3 = Boolean(
     validLines.length > 0 &&
@@ -429,7 +428,7 @@ export const FpkFormPage: React.FC<{ fpkId?: string }> = ({ fpkId }) => {
     setNewSite({
       code: makeCode(trimmed, 'ST-'),
       name: `Site Utama ${trimmed}`,
-      address: 'Jl. Raya Industri No. 10',
+      address: '',
       areaId: defaultArea
     });
     setSiteSearchText(`Site Utama ${trimmed}`);
@@ -459,7 +458,7 @@ export const FpkFormPage: React.FC<{ fpkId?: string }> = ({ fpkId }) => {
     setNewSite({
       code: generatedCode,
       name: trimmed,
-      address: 'Jl. Raya Industri No. 10',
+      address: '',
       areaId: defaultArea
     });
     setSiteSearchText(trimmed);
@@ -539,7 +538,7 @@ export const FpkFormPage: React.FC<{ fpkId?: string }> = ({ fpkId }) => {
   const handleSaveDraft = (navigateAway = false) => {
     const r = actions.saveFpkDraft(input, mode === 'draf' ? fpkId : undefined);
     if (!r.ok) return toast(`Gagal menyimpan draf: ${r.error}`, 'err');
-    localStorage.removeItem('fpk_draft_v2');
+    localStorage.removeItem('fpk_draft_v3');
     const now = new Date();
     const hh = String(now.getHours()).padStart(2, '0');
     const mm = String(now.getMinutes()).padStart(2, '0');
@@ -556,6 +555,7 @@ export const FpkFormPage: React.FC<{ fpkId?: string }> = ({ fpkId }) => {
       if (!check1) {
         if (!clientId && !newClient) newErrors['client'] = 'Pilih klien atau ketik nama klien baru.';
         else if (!siteId && !newSite) newErrors['site'] = 'Pilih site atau ketik nama site baru.';
+        else if (newSite && !newSite.address.trim()) newErrors['siteAddress'] = 'Isi alamat lengkap site.';
       }
       if (!monthlyValue) {
         newErrors['monthlyValue'] = 'Isi nilai penawaran per bulan sebelum PPN.';
@@ -593,7 +593,7 @@ export const FpkFormPage: React.FC<{ fpkId?: string }> = ({ fpkId }) => {
       if (!r.ok) return toast(`Gagal: ${r.error}`, 'err');
       const r2 = actions.submitFpk(r.id!);
       if (!r2.ok) return toast(`Draf tersimpan tapi belum bisa dikirim: ${r2.error}`, 'err');
-      localStorage.removeItem('fpk_draft_v2');
+      localStorage.removeItem('fpk_draft_v3');
       toast('FPK dikirim ke cek divisi');
       navigate(`/fpk/${r.id}`);
     }
@@ -715,7 +715,15 @@ export const FpkFormPage: React.FC<{ fpkId?: string }> = ({ fpkId }) => {
                       value={clientSearchText}
                       onChange={e => {
                         setClientSearchText(e.target.value);
-                        if (clientId) setClientId('');
+                        if (clientId || newClient) {
+                          // Klien berubah → site milik klien lama tidak berlaku lagi
+                          setClientId('');
+                          setNewClient(null);
+                          setSiteId('');
+                          setNewSite(null);
+                          setSiteSearchText('');
+                          setSiteRunningDismissed(false);
+                        }
                       }}
                       className="w-full px-3 h-9 text-xs border border-slate-200 rounded-lg mb-2 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     />
@@ -903,9 +911,16 @@ export const FpkFormPage: React.FC<{ fpkId?: string }> = ({ fpkId }) => {
                     rows={2}
                     placeholder="Contoh: Jl. Raya Industri No. 10, Kawasan Industri Jababeka, Cikarang..."
                     value={newSite.address}
-                    onChange={e => setNewSite({ ...newSite, address: e.target.value })}
-                    className="w-full text-sm bg-white resize-y border border-slate-300 rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    onChange={e => {
+                      setNewSite({ ...newSite, address: e.target.value });
+                      if (errors['siteAddress']) setErrors(prev => ({ ...prev, siteAddress: '' }));
+                    }}
+                    className={cx(
+                      'w-full text-sm bg-white resize-y border rounded-lg px-3 py-2 text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500',
+                      errors['siteAddress'] ? 'border-red-400' : 'border-slate-300'
+                    )}
                   />
+                  {errors['siteAddress'] && <p className="text-[13px] text-red-600 mt-1">{errors['siteAddress']}</p>}
                 </div>
 
                 <p className="text-[13px] text-slate-500">
@@ -959,45 +974,24 @@ export const FpkFormPage: React.FC<{ fpkId?: string }> = ({ fpkId }) => {
                   Durasi kontrak
                 </label>
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => applyDurationPreset('12')}
-                    className={cx(
-                      'h-10 px-4 text-xs font-medium rounded-lg border transition-colors',
-                      durationPreset === '12'
-                        ? 'border-slate-900 bg-slate-100 text-slate-900 font-semibold'
-                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                    )}
-                  >
-                    12 bulan
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyDurationPreset('24')}
-                    className={cx(
-                      'h-10 px-4 text-xs font-medium rounded-lg border transition-colors',
-                      durationPreset === '24'
-                        ? 'border-slate-900 bg-slate-100 text-slate-900 font-semibold'
-                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                    )}
-                  >
-                    24 bulan
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => applyDurationPreset('custom')}
-                    className={cx(
-                      'h-10 px-4 text-xs font-medium rounded-lg border transition-colors',
-                      durationPreset === 'custom'
-                        ? 'border-slate-900 bg-slate-100 text-slate-900 font-semibold'
-                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
-                    )}
-                  >
-                    Lainnya
-                  </button>
+                  {DURATION_PRESETS.map(m => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => applyDurationPreset(m)}
+                      className={cx(
+                        'h-10 px-4 text-xs font-medium rounded-lg border transition-colors',
+                        durationPreset === m
+                          ? 'border-slate-900 bg-slate-100 text-slate-900 font-semibold'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                      )}
+                    >
+                      {m} bulan
+                    </button>
+                  ))}
                 </div>
                 <p className="text-[13px] text-slate-400 mt-1">
-                  Preset durasi untuk auto-set tanggal akhir kontrak
+                  Tanggal akhir terisi otomatis. Bisa diubah manual.
                 </p>
               </div>
             </div>
@@ -1022,6 +1016,7 @@ export const FpkFormPage: React.FC<{ fpkId?: string }> = ({ fpkId }) => {
                     value={periodStart}
                     min={TODAY}
                     onChange={e => handleStartDateChange(e.target.value)}
+                    onClick={openPicker}
                     className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                   />
                 </div>
@@ -1048,12 +1043,13 @@ export const FpkFormPage: React.FC<{ fpkId?: string }> = ({ fpkId }) => {
                     value={periodEnd}
                     min={periodStart || TODAY}
                     onChange={e => handleEndDateChange(e.target.value)}
+                    onClick={openPicker}
                     className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
                   />
                 </div>
                 <p className="text-[13px] text-slate-400 mt-1">
                   {periodStart && periodEnd && diffDays(periodStart, periodEnd) > 0
-                    ? `Durasi: ${Math.round(diffDays(periodStart, periodEnd) / 30.417)} bulan (${diffDays(periodStart, periodEnd)} hari)`
+                    ? `Durasi: ${Math.round((diffDays(periodStart, periodEnd) + 1) / 30.417)} bulan (${diffDays(periodStart, periodEnd) + 1} hari)`
                     : '–'}
                 </p>
               </div>
@@ -1582,7 +1578,7 @@ export const FpkFormPage: React.FC<{ fpkId?: string }> = ({ fpkId }) => {
               className="text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 px-3 py-2 rounded-lg transition-colors"
               onClick={() => {
                 setShowBackConfirmModal(false);
-                localStorage.removeItem('fpk_draft_v2');
+                localStorage.removeItem('fpk_draft_v3');
                 navigate(fpkId ? `/fpk/${fpkId}` : '/fpk');
               }}
             >

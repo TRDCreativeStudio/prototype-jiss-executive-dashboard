@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Pencil } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { Btn, Card, ErrorText, ExportBtn, Field, Input, Modal, PageHeader, Table, Td, exportCsv, runAction } from '../../ui/kit';
+import { Btn, Card, ErrorText, ExportBtn, Field, Input, Modal, PageHeader, Table, Td, exportCsv, runAction, Tr, CellCode } from '../../ui/kit';
 import { ActiveBadge, muted } from './common';
 import type { Position } from '../../domain/types';
 
@@ -42,13 +42,13 @@ export const PositionsPage: React.FC = () => {
       >
         <Table head={['Kode', 'Nama', 'Keterangan', 'Status', '']}>
           {rows.map(r => (
-            <tr key={r.id} className={muted(r.active)}>
-              <Td className="font-mono text-xs">{r.code}</Td>
+            <Tr key={r.id} muted={!r.active}>
+              <Td><CellCode>{r.code}</CellCode></Td>
               <Td className="font-semibold">{r.name}</Td>
-              <Td className="text-xs text-slate-500">{r.description ?? '–'}</Td>
+              <Td className="text-[13px] text-slate-500">{r.description ?? '–'}</Td>
               <Td><ActiveBadge active={r.active} /></Td>
               <Td>{editable && <Btn size="sm" variant="ghost" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => setEdit(r)}>Ubah</Btn>}</Td>
-            </tr>
+            </Tr>
           ))}
         </Table>
       </Card>

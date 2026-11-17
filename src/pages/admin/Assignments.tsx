@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { Btn, Card, PageHeader, Select, Table, Td, runAction } from '../../ui/kit';
+import { Btn, Card, PageHeader, Select, Table, Td, runAction, Tr, CellMain } from '../../ui/kit';
 import { Link } from '../../router';
 import { AreaForm } from '../master/Areas';
 import type { Area, Division } from '../../domain/types';
@@ -28,12 +28,12 @@ export const AssignmentsPage: React.FC = () => {
       <Card title="PIC area (Admin Area) per area" pad={false}>
         <Table head={['Area', 'PIC utama', 'PIC cadangan', '']}>
           {state.areas.filter(a => a.active).map(a => (
-            <tr key={a.id}>
-              <Td>{access.area(a.id) ? <Link to={`/area/${a.id}`} className="font-semibold text-indigo-700 hover:underline">{a.name}</Link> : <span className="font-semibold">{a.name}</span>}</Td>
-              <Td>{lookups.user.get(a.picUserId ?? '')?.name ?? <span className="text-rose-600 text-xs font-semibold">Belum ada</span>}</Td>
+            <Tr key={a.id} to={`/area/${a.id}`}>
+              <Td>{access.area(a.id) ? <CellMain>{a.name}</CellMain> : <span className="font-semibold">{a.name}</span>}</Td>
+              <Td>{lookups.user.get(a.picUserId ?? '')?.name ?? <span className="text-rose-600 font-semibold">Belum ada</span>}</Td>
               <Td>{lookups.user.get(a.backupPicUserId ?? '')?.name ?? '–'}</Td>
               <Td>{editable && <Btn size="sm" variant="ghost" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => setEditArea(a)}>Ganti</Btn>}</Td>
-            </tr>
+            </Tr>
           ))}
         </Table>
         <p className="text-[11px] text-slate-500 px-4 py-3 border-t border-slate-100">Mengganti PIC area langsung memindah tugas terbuka ke orang baru dan tercatat di audit log.</p>
@@ -49,14 +49,14 @@ export const AssignmentsPage: React.FC = () => {
         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2">Default untuk semua site klien</h3>
         <div className="border border-slate-200 rounded-lg overflow-hidden mb-5">
           <Table head={['Divisi', 'Orang']}>
-            <tr>
+            <Tr>
               <Td className="font-medium">Marketing (account owner)</Td>
               <Td>{lookups.user.get(client?.accountOwnerId ?? '')?.name}{client?.coOwnerIds.length ? ` + co-owner ${client.coOwnerIds.map(x => lookups.user.get(x)?.name).join(', ')}` : ''}</Td>
-            </tr>
+            </Tr>
             {DIVS.map(d => {
               const cur = defaults.find(a => a.division === d);
               return (
-                <tr key={d}>
+                <Tr key={d}>
                   <Td className="font-medium">{d}</Td>
                   <Td>
                     {editable ? (
@@ -73,7 +73,7 @@ export const AssignmentsPage: React.FC = () => {
                       </Select>
                     ) : (lookups.user.get(cur?.userId ?? '')?.name ?? <span className="text-slate-400">Belum diisi, ke kepala divisi ({head(d)})</span>)}
                   </Td>
-                </tr>
+                </Tr>
               );
             })}
           </Table>
@@ -83,14 +83,14 @@ export const AssignmentsPage: React.FC = () => {
         <div className="border border-slate-200 rounded-lg overflow-hidden">
           <Table head={['Site', 'Divisi', 'Orang', '']}>
             {overrides.map(o => (
-              <tr key={o.id}>
+              <Tr key={o.id}>
                 <Td>{lookups.site.get(o.siteId!)?.name}</Td>
                 <Td>{o.division}</Td>
                 <Td>{lookups.user.get(o.userId)?.name}</Td>
                 <Td>{editable && <Btn size="sm" variant="ghost" icon={<Trash2 className="w-3.5 h-3.5" />} onClick={() => runAction(actions.saveAssignment(null, o.id), 'Override dihapus')}>Hapus</Btn>}</Td>
-              </tr>
+              </Tr>
             ))}
-            {overrides.length === 0 && <tr><Td className="text-slate-400">Tidak ada. Semua site memakai default klien.</Td><Td /><Td /><Td /></tr>}
+            {overrides.length === 0 && <Tr><Td className="text-slate-400">Tidak ada. Semua site memakai default klien.</Td><Td /><Td /><Td /></Tr>}
           </Table>
           {editable && (
             <div className="flex flex-col sm:flex-row gap-2 p-3 bg-slate-50 border-t border-slate-200">
