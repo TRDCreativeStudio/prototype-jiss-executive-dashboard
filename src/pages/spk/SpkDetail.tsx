@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CheckCircle2, XCircle, ThumbsUp, Lock, AlertTriangle, FileEdit, Receipt } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { AttachmentChip, Badge, Btn, Card, DL, Input, Money, PageHeader, Table, Td, cx, toast, DocLink } from '../../ui/kit';
+import { AttachmentChip, Badge, Btn, Card, DL, Input, Money, PageHeader, Table, Td, cx, toast, DocLink, StickyActionBar } from '../../ui/kit';
 import { ReasonModal } from '../../ui/ReasonModal';
 import { Link, navigate } from '../../router';
 import { NotFound } from '../Misc';
@@ -53,7 +53,7 @@ export const SpkDetailPage: React.FC<{ id: string }> = ({ id }) => {
   const contract = addenda.length ? effectiveContractOn(root, state.spks, asOf || TODAY) : undefined;
 
   return (
-    <div className="space-y-5">
+    <div className={cx('space-y-5', canVerify && !selfInput && 'pb-24')}>
       <PageHeader
         back="/spk"
         title={s.number}
@@ -81,20 +81,27 @@ export const SpkDetailPage: React.FC<{ id: string }> = ({ id }) => {
       )}
 
       {canVerify && (
-        <Card title="Verifikasi Finance">
+        <Card title="Verifikasi Finance" className="border-indigo-100 bg-indigo-50/20">
           {selfInput ? (
             <p className="text-sm text-rose-700">Anda ikut menginput SPK ini; verifikasi harus oleh user Finance lain.</p>
           ) : (
-            <>
-              <p className="text-sm text-slate-600 mb-3">{hasDiff ? `Ada field yang beda dari ${f ? 'FPK' : 'acuan'} (ditandai merah di tabel perbandingan). Pilih apakah SPK-nya salah atau justru benar.` : `Semua field sesuai ${f ? 'FPK' : 'SPK induk dan memo yang disetujui'}.`}</p>
-              <div className="flex flex-wrap gap-2">
-                <Btn variant="success" disabled={hasDiff} icon={<CheckCircle2 className="w-4 h-4" />} onClick={() => { const r = actions.verifySpk(s.id, 'cocok', '', hasDiff); if (r.ok) toast('SPK aktif'); else toast(r.error, 'err'); }}>Cocok, aktifkan</Btn>
-                {hasDiff && <>
-                  <Btn variant="warning" icon={<XCircle className="w-4 h-4" />} onClick={() => setModal('salah')}>SPK salah</Btn>
-                  <Btn icon={<ThumbsUp className="w-4 h-4" />} onClick={() => setModal('benar')}>SPK benar (jadi acuan)</Btn>
-                </>}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <p className="text-sm text-slate-700 font-medium">
+                  {hasDiff
+                    ? `Ada field yang beda dari ${f ? 'FPK' : 'acuan'} (ditandai merah di tabel perbandingan).`
+                    : `Semua field sesuai ${f ? 'FPK' : 'SPK induk dan memo yang disetujui'}.`}
+                </p>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {hasDiff
+                    ? 'Periksa baris perbandingan di bawah, lalu pilih tindakan pada bilah aksi di bawah layar.'
+                    : 'Pilih "Cocok, aktifkan" pada bilah aksi di bawah layar untuk mengaktifkan SPK.'}
+                </p>
               </div>
-            </>
+              <Badge tone={hasDiff ? 'amber' : 'green'} className="shrink-0 self-start sm:self-auto">
+                {hasDiff ? 'Perlu Tindakan Finance' : 'Siap Diaktifkan'}
+              </Badge>
+            </div>
           )}
         </Card>
       )}
@@ -182,6 +189,55 @@ export const SpkDetailPage: React.FC<{ id: string }> = ({ id }) => {
           )}
         </div>
       </div>
+
+      {canVerify && !selfInput && (
+        <StickyActionBar
+          actions={
+            <>
+              <Btn
+                variant="success"
+                disabled={hasDiff}
+                icon={<CheckCircle2 className="w-4 h-4" />}
+                onClick={() => {
+                  const r = actions.verifySpk(s.id, 'cocok', '', hasDiff);
+                  if (r.ok) toast('SPK aktif');
+                  else toast(r.error, 'err');
+                }}
+              >
+                Cocok, aktifkan
+              </Btn>
+              {hasDiff && (
+                <>
+                  <Btn
+                    variant="warning"
+                    icon={<XCircle className="w-4 h-4" />}
+                    onClick={() => setModal('salah')}
+                  >
+                    SPK salah
+                  </Btn>
+                  <Btn
+                    variant="primary"
+                    icon={<ThumbsUp className="w-4 h-4" />}
+                    onClick={() => setModal('benar')}
+                  >
+                    SPK benar (jadi acuan)
+                  </Btn>
+                </>
+              )}
+            </>
+          }
+        >
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-slate-900">Verifikasi Finance</span>
+            <span className="text-slate-300">·</span>
+            <span className="text-xs text-slate-500">
+              {hasDiff
+                ? 'Ada field beda dari FPK. Pilih apakah SPK salah atau benar.'
+                : 'Semua field cocok dengan FPK.'}
+            </span>
+          </div>
+        </StickyActionBar>
+      )}
 
       {modal === 'salah' && (
         <ReasonModal title="SPK salah" label="Apa yang salah" confirm="Tandai perlu revisi" variant="warning"

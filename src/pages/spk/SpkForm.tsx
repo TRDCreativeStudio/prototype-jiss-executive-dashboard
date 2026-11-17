@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Paperclip } from 'lucide-react';
+import { Plus, Trash2, Paperclip, Info, FileText } from 'lucide-react';
 import { useStore } from '../../store/store';
 import { Btn, Card, ErrorText, Field, Input, PageHeader, Select, toast, DateInput } from '../../ui/kit';
 import { navigate } from '../../router';
@@ -15,20 +15,42 @@ export const SpkFormPage: React.FC<{ reviseId?: string }> = ({ reviseId }) => {
   const old = reviseId ? lookups.spk.get(reviseId) : undefined;
   const qs = new URLSearchParams(window.location.search);
   const qsFpk = qs.get('fpk') ?? '';
+  const qsProject = qs.get('project') ?? '';
+  const qsSite = qs.get('site') ?? qsProject;
   const qsParent = qs.get('induk') ?? '';
-  const myClient = (cid: string) => { const c = lookups.client.get(cid); return !!c && (c.accountOwnerId === me.id || c.coOwnerIds.includes(me.id)); };
-  const fpks = state.fpks.filter(f => ['disetujui', 'berjalan', 'tertutup_sebagian'].includes(f.status) && myClient(latest(f).clientId));
 
-  const [fpkId, setFpkId] = useState(old?.fpkId ?? (fpks.some(f => f.id === qsFpk) ? qsFpk : ''));
+  const myClient = (cid: string) => {
+    const c = lookups.client.get(cid);
+    return !!c && (c.accountOwnerId === me.id || c.coOwnerIds.includes(me.id));
+  };
+
+  // Target FPK & Site dari data project / URL
+  const targetFpk = qsFpk
+    ? lookups.fpk.get(qsFpk)
+    : (qsProject ? state.fpks.find(f => latest(f).siteId === qsProject) : undefined);
+  const targetVer = targetFpk ? latest(targetFpk) : undefined;
+
+  const fpks = state.fpks.filter(f =>
+    (['disetujui', 'berjalan', 'tertutup_sebagian'].includes(f.status) || f.id === qsFpk || (targetFpk && f.id === targetFpk.id)) &&
+    (myClient(latest(f).clientId) || (targetFpk && f.id === targetFpk.id))
+  );
+
+  const initialFpkId = old?.fpkId ?? (targetFpk ? targetFpk.id : (fpks.some(f => f.id === qsFpk) ? qsFpk : ''));
+  const [fpkId, setFpkId] = useState(initialFpkId);
   const [number, setNumber] = useState(old?.number ?? '');
   const [type, setType] = useState<SpkType>(old?.type ?? (qsParent ? 'perpanjangan' : 'baru'));
   const [parentSpkId, setParent] = useState(old?.parentSpkId ?? qsParent);
   const [effectiveDate, setEff] = useState(old?.effectiveDate ?? '');
-  const [siteId, setSiteId] = useState(old?.siteId ?? '');
-  const [periodStart, setPS] = useState(old?.periodStart ?? '');
-  const [periodEnd, setPE] = useState(old?.periodEnd ?? '');
-  const [monthlyValue, setValue] = useState(old?.monthlyValue ?? 0);
-  const [lines, setLines] = useState<Line[]>(old?.lines.map(l => ({ positionId: l.positionId, qty: l.qty, shift: l.shift, fpkLineId: l.fpkLineId })) ?? [{ positionId: '', qty: 1, shift: 'Pagi' }]);
+  const [siteId, setSiteId] = useState(old?.siteId ?? (targetVer ? targetVer.siteId : (qsSite || '')));
+  const [periodStart, setPS] = useState(old?.periodStart ?? (targetVer ? (targetVer.periodStart || targetVer.plannedStart || '') : ''));
+  const [periodEnd, setPE] = useState(old?.periodEnd ?? (targetVer ? (targetVer.periodEnd || '') : ''));
+  const [monthlyValue, setValue] = useState(old?.monthlyValue ?? (targetVer ? (targetVer.monthlyValue || 0) : 0));
+  const [lines, setLines] = useState<Line[]>(
+    old?.lines.map(l => ({ positionId: l.positionId, qty: l.qty, shift: l.shift, fpkLineId: l.fpkLineId })) ??
+    (targetVer && targetVer.lines && targetVer.lines.length > 0
+      ? targetVer.lines.map(l => ({ positionId: l.positionId, qty: l.qty, shift: l.shift, fpkLineId: l.id }))
+      : [{ positionId: '', qty: 1, shift: 'Pagi' }])
+  );
   const [pdf, setPdf] = useState(old ? '' : '');
   const [err, setErr] = useState('');
 
@@ -51,19 +73,59 @@ export const SpkFormPage: React.FC<{ reviseId?: string }> = ({ reviseId }) => {
     navigate(`/spk/${r.id}`);
   };
 
+  const isAutoFilledFromProject = Boolean(targetFpk || (f && siteId && periodStart && periodEnd && monthlyValue > 0));
+
   return (
     <div className="max-w-4xl">
       <PageHeader
-        back={reviseId ? `/spk/${reviseId}` : '/spk'}
+        back={reviseId ? `/spk/${reviseId}` : (qsProject ? `/project/${qsProject}` : '/spk')}
         title={reviseId ? `Input revisi ${old!.number}` : 'Input SPK'}
-        subtitle="Ketik ulang data kunci dari dokumen SPK. Sengaja tanpa isi otomatis dari FPK, supaya Finance bisa menangkap perbedaannya."
+        subtitle={
+          isAutoFilledFromProject
+            ? 'Informasi dasar terisi otomatis dari data Project & FPK. Silakan lengkapi Nomor SPK dan lampiran PDF SPK.'
+            : 'Ketik ulang data kunci dari dokumen SPK. Sengaja tanpa isi otomatis dari FPK, supaya Finance bisa menangkap perbedaannya.'
+        }
       />
       {old?.revisionReason && <p className="text-sm bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-4 py-3 mb-4">Alasan perlu revisi: {old.revisionReason}</p>}
+      
+      {isAutoFilledFromProject && (
+        <div className="bg-indigo-50/80 border border-indigo-200 rounded-xl px-4 py-3 text-xs text-indigo-900 flex items-start gap-2.5 mb-4">
+          <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-semibold block text-indigo-950">
+              Data dasar telah terisi otomatis dari Project ({lookups.site.get(siteId)?.name ?? 'Site'}) &amp; {f?.number ?? targetFpk?.number ?? 'FPK'}
+            </span>
+            <span className="text-indigo-700">
+              Site, periode kontrak, nilai bulanan, dan formasi personel telah disalin. Marketing hanya perlu melengkapi <strong>Nomor SPK</strong> dan melampirkan <strong>PDF SPK</strong>.
+            </span>
+          </div>
+        </div>
+      )}
+
       <div className="space-y-4">
         <Card title="Dokumen">
           <div className="grid sm:grid-cols-2 gap-3">
             <Field label="FPK induk" required>
-              <Select value={noFpkRenewal ? '' : fpkId} onChange={e => { setFpkId(e.target.value); setSiteId(''); setLines(lines.map(l => ({ ...l, fpkLineId: undefined }))); }} disabled={!!reviseId || noFpkRenewal}>
+              <Select
+                value={noFpkRenewal ? '' : fpkId}
+                onChange={e => {
+                  const newFpkId = e.target.value;
+                  setFpkId(newFpkId);
+                  const selectedFpk = lookups.fpk.get(newFpkId);
+                  if (selectedFpk) {
+                    const v = latest(selectedFpk);
+                    setSiteId(v.siteId);
+                    setPS(v.periodStart || v.plannedStart || '');
+                    setPE(v.periodEnd || '');
+                    setValue(v.monthlyValue || 0);
+                    setLines(v.lines.map(l => ({ positionId: l.positionId, qty: l.qty, shift: l.shift, fpkLineId: l.id })));
+                  } else {
+                    setSiteId('');
+                    setLines([{ positionId: '', qty: 1, shift: 'Pagi' }]);
+                  }
+                }}
+                disabled={!!reviseId || noFpkRenewal}
+              >
                 <option value="">{noFpkRenewal ? (parentSpk!.fpkId ? `Mengikuti SPK induk (${lookups.fpk.get(parentSpk!.fpkId)?.number})` : 'Tidak ada (SPK induk data awal)') : '– pilih FPK klien yang Anda pegang –'}</option>
                 {fpks.map(x => <option key={x.id} value={x.id}>{x.number} · {lookups.client.get(latest(x).clientId)?.name} · {lookups.site.get(latest(x).siteId)?.name}</option>)}
               </Select>
@@ -101,10 +163,21 @@ export const SpkFormPage: React.FC<{ reviseId?: string }> = ({ reviseId }) => {
                   <button onClick={() => setPdf('')} className="text-slate-400 hover:text-rose-600"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
               ) : (
-                <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-700 border border-dashed border-indigo-300 rounded-lg px-3 py-2 cursor-pointer hover:bg-indigo-50">
-                  <Plus className="w-3.5 h-3.5" /> Pilih PDF
-                  <input type="file" accept=".pdf" className="hidden" onChange={e => { const n = e.target.files?.[0]?.name; if (n) setPdf(n); }} />
-                </label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-700 border border-dashed border-indigo-300 rounded-lg px-3 py-2 cursor-pointer hover:bg-indigo-50">
+                    <Plus className="w-3.5 h-3.5" /> Pilih PDF
+                    <input type="file" accept=".pdf" className="hidden" onChange={e => { const n = e.target.files?.[0]?.name; if (n) setPdf(n); }} />
+                  </label>
+                  {siteId && (
+                    <button
+                      type="button"
+                      onClick={() => setPdf(`SPK_${lookups.site.get(siteId)?.code ?? 'SITE'}_${new Date().getFullYear()}.pdf`)}
+                      className="text-xs text-slate-500 hover:text-indigo-600 underline"
+                    >
+                      Gunakan contoh file PDF
+                    </button>
+                  )}
+                </div>
               )}
             </Field>
           </div>

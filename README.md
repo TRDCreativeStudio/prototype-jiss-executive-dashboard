@@ -1,6 +1,6 @@
 # Prototipe Sistem Kontrol Operasional (PRD v1.2)
 
-Prototipe klik-able untuk 5 modul di PRD v1.2: **Client + Area + Site Management**, **SPK + FPK / memo eksternal**, **People in Act**, **Notifikasi**, dan **RBAC**.
+Prototipe klik-able untuk 5 modul di PRD v1.2: **Master Data** (Client, Area, Site, Jabatan), **SPK + FPK / memo eksternal**, **People in Act**, **Notifikasi**, dan **RBAC**.
 Tujuannya untuk validasi alur ke user dan contoh layar untuk tim dev. **Kalau prototipe dan PRD berbeda, yang berlaku PRD.**
 
 - Semua data di prototipe ini **fiktif** (nama orang, klien, site, nomor dokumen, nilai uang).
@@ -44,6 +44,17 @@ src/store/    state + aksi (master data, FPK, SPK, persiapan personel)
 src/pages/    layar per modul
 src/ui/       komponen tampilan
 ```
+
+## Aturan UI & Interaksi (Action Bar)
+
+Saat halaman membutuhkan tindakan pengguna (*action required*):
+1. **Posisi**: Tombol aksi diposisikan melayang tetap di bagian bawah layar (*sticky / fixed bottom*).
+2. **Penataan Tombol**: Daftar tombol aksi (*list button*) ditempatkan di sisi kanan (*align right*), berurutan secara konsisten sesuai prioritas.
+3. **Warna & Batas**: Memiliki latar belakang putih bersih (`bg-white`), garis tepi atas (*outline di atas* berupa `border-t border-slate-200`), serta elevasi bayangan halus.
+4. **Konteks Kiri**: Menampilkan label/tahapan atau ringkasan status tindakan di sisi kiri untuk memandu pengguna tanpa harus menggulir layar.
+5. **Responsif**: Pada desktop dimulai setelah lebar sidebar (`lg:left-64`), sedangkan pada mobile memenuhi lebar layar (`left-0`). Kontainer halaman diberi padding bawah (`pb-24`) agar konten terbawah tidak tertutup bilah aksi.
+6. **Komponen Standar**: Menggunakan komponen reusable `<StickyActionBar actions={<>...</>}>...</StickyActionBar>` dari `src/ui/kit.tsx`.
+   - *Implementasi pertama*: Layar Verifikasi Finance pada detail SPK (`/spk/:id`).
 
 ## Belum ada di prototipe
 

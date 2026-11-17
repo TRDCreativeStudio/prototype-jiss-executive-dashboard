@@ -11,12 +11,12 @@ export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Bool
 
 const TONES: Record<Tone, string> = {
   slate: 'bg-slate-100 text-slate-700 border-slate-200',
-  blue: 'bg-blue-50 text-blue-700 border-blue-200',
-  amber: 'bg-amber-50 text-amber-800 border-amber-200',
+  blue: 'bg-amber-50 text-amber-900 border-amber-200',
+  amber: 'bg-amber-100 text-amber-950 border-amber-300 font-semibold',
   green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   red: 'bg-rose-50 text-rose-700 border-rose-200',
-  violet: 'bg-violet-50 text-violet-700 border-violet-200',
-  teal: 'bg-teal-50 text-teal-700 border-teal-200',
+  violet: 'bg-amber-100 text-amber-950 border-amber-300',
+  teal: 'bg-amber-50 text-amber-900 border-amber-200',
 };
 
 export const Badge: React.FC<{ tone?: Tone; children: React.ReactNode; className?: string }> = ({ tone = 'slate', children, className }) => (
@@ -54,12 +54,12 @@ export const Card: React.FC<{ title?: React.ReactNode; actions?: React.ReactNode
 
 type BtnVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'success' | 'warning';
 const BTN: Record<BtnVariant, string> = {
-  primary: 'bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-600',
-  secondary: 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300',
+  primary: 'bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold border-amber-400 hover:border-amber-300 shadow-xs active:bg-amber-500',
+  secondary: 'bg-white hover:bg-amber-50/40 text-slate-800 border-slate-300 hover:border-amber-400 font-medium transition-colors',
   danger: 'bg-rose-600 hover:bg-rose-700 text-white border-rose-600',
   success: 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600',
-  warning: 'bg-amber-500 hover:bg-amber-600 text-white border-amber-500',
-  ghost: 'bg-transparent hover:bg-slate-100 text-slate-600 border-transparent',
+  warning: 'bg-amber-400 hover:bg-amber-500 text-slate-950 font-bold border-amber-400',
+  ghost: 'bg-transparent hover:bg-amber-50/80 text-slate-700 hover:text-amber-950 border-transparent',
 };
 
 export const Btn: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: BtnVariant; size?: 'sm' | 'md'; icon?: React.ReactNode }> = ({ variant = 'primary', size = 'md', icon, className, children, ...rest }) => (
@@ -104,7 +104,7 @@ export const AttachmentChip: React.FC<{ a: Attachment; clientId?: string; entity
       onClick={open}
       disabled={!allowed}
       title={allowed ? 'Buka lampiran' : 'Lampiran berisi harga: hanya Marketing pemegang klien, Finance, BOD (dan Pengadaan untuk BOQ)'}
-      className={cx('inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs text-left max-w-full', allowed ? 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-indigo-50 hover:border-indigo-200' : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed')}
+      className={cx('inline-flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs text-left max-w-full', allowed ? 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-amber-50 hover:border-amber-300' : 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed')}
     >
       {allowed ? <Paperclip className="w-3 h-3 shrink-0" /> : <Lock className="w-3 h-3 shrink-0" />}
       <span className="font-medium shrink-0">{a.kind}:</span>
@@ -123,7 +123,7 @@ export const Field: React.FC<{ label: string; required?: boolean; hint?: string;
   </label>
 );
 
-export const inputCls = 'w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white focus:outline-hidden focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 disabled:bg-slate-50 disabled:text-slate-500';
+export const inputCls = 'w-full px-3 py-2 text-sm border border-slate-300 rounded-lg bg-white text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-amber-300 focus:border-amber-500 disabled:bg-slate-50 disabled:text-slate-500 transition-colors shadow-xs';
 
 export const Input = (p: React.InputHTMLAttributes<HTMLInputElement>) => <input {...p} className={cx(inputCls, p.className)} />;
 /** Input tanggal bawaan browser (formatnya ikut bahasa browser) + tanggal tertulis di bawahnya supaya tidak salah baca hari/bulan. */
@@ -133,7 +133,9 @@ export const DateInput = (p: Omit<React.InputHTMLAttributes<HTMLInputElement>, '
     {typeof p.value === 'string' && p.value && <div className="text-xs text-slate-600 mt-1">{fmtDate(p.value)}</div>}
   </div>
 );
-export const Select = (p: React.SelectHTMLAttributes<HTMLSelectElement>) => <select {...p} className={cx(inputCls, p.className)} />;
+export const Select = (p: React.SelectHTMLAttributes<HTMLSelectElement>) => (
+  <select {...p} className={cx(inputCls, 'cursor-pointer font-medium hover:border-slate-400', p.className)} />
+);
 export const Textarea = (p: React.TextareaHTMLAttributes<HTMLTextAreaElement>) => <textarea rows={3} {...p} className={cx(inputCls, p.className)} />;
 
 export const SearchBox: React.FC<{ value: string; onChange: (v: string) => void; placeholder?: string }> = ({ value, onChange, placeholder }) => (
@@ -183,7 +185,7 @@ export const Tabs: React.FC<{ tabs: { key: string; label: React.ReactNode }[]; v
       <button
         key={t.key}
         onClick={() => onChange(t.key)}
-        className={cx('px-3 py-2 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px', value === t.key ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800')}
+        className={cx('px-3 py-2 text-sm font-semibold whitespace-nowrap border-b-2 -mb-px', value === t.key ? 'border-amber-500 text-amber-950 font-bold' : 'border-transparent text-slate-500 hover:text-slate-800')}
       >
         {t.label}
       </button>
@@ -245,6 +247,43 @@ export const ExportBtn: React.FC<{ onClick: () => void }> = ({ onClick }) => (
     Ekspor Excel
   </Btn>
 );
+
+// ---------------- Sticky Action Bar ----------------
+export interface StickyActionBarProps {
+  /** Konten atau keterangan di sisi kiri (mis. label tahapan, ringkasan, atau instruksi). */
+  children?: React.ReactNode;
+  /** List button aksi yang selalu berada di sisi kanan dengan background putih dan outline di atas. */
+  actions: React.ReactNode;
+  className?: string;
+}
+
+/**
+ * Aturan UI Action Bar:
+ * - Muncul sticky/fixed di bagian bawah layar saat halaman membutuhkan tindakan pengguna (action required).
+ * - Sisi kiri menampilkan konteks/status tindakan yang dibutuhkan.
+ * - Sisi kanan menampilkan daftar tombol aksi (aligned right).
+ * - Background putih (bg-white) dengan outline di atas (border-t border-slate-200) dan elevasi bayangan halus.
+ * - Pada desktop, bar dimulai setelah sidebar (lg:left-64).
+ */
+export const StickyActionBar: React.FC<StickyActionBarProps> = ({ children, actions, className }) => {
+  return (
+    <div
+      className={cx(
+        'fixed bottom-0 left-0 lg:left-64 right-0 z-30 bg-white border-t border-slate-200 shadow-[0_-4px_16px_rgba(0,0,0,0.06)]',
+        className,
+      )}
+    >
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="min-w-0 text-sm text-slate-600">
+          {children}
+        </div>
+        <div className="flex items-center justify-end gap-2.5 sm:gap-3 shrink-0 flex-wrap">
+          {actions}
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ---------------- Toast ----------------
 type ToastMsg = { id: number; text: string; tone: 'ok' | 'err' };

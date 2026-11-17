@@ -26,12 +26,16 @@ import { SpkFormPage } from './pages/spk/SpkForm';
 import { WithoutSpkPage } from './pages/spk/WithoutSpk';
 import { SecurityPage, SecurityDetail } from './pages/people/Security';
 import { MemoListPage, MemoNewPage, MemoDetailPage } from './pages/memo/Memo';
+import { ProjectListPage } from './pages/project/ProjectList';
+import { ProjectDetailPage } from './pages/project/ProjectDetail';
 
 type Route = { path: string; perm: Perm; render: (p: Record<string, string>) => React.ReactNode };
 
 const ROUTES: Route[] = [
   { path: '/tugas', perm: 'tasks.view', render: () => <TasksPage /> },
   { path: '/keputusan', perm: 'decisions.view', render: () => <DecisionsPage /> },
+  { path: '/project', perm: 'fpk.view', render: () => <ProjectListPage /> },
+  { path: '/project/:id', perm: 'fpk.view', render: p => <ProjectDetailPage id={p.id} /> },
   { path: '/fpk', perm: 'fpk.view', render: () => <FpkListPage /> },
   { path: '/fpk/baru', perm: 'fpk.create', render: () => <FpkFormPage /> },
   { path: '/fpk/:id/ubah', perm: 'fpk.create', render: p => <FpkFormPage fpkId={p.id} /> },

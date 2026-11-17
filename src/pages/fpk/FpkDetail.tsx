@@ -15,7 +15,7 @@ import { FpkPeople } from './FpkPeople';
 import { CheckChips } from './FpkList';
 
 const RESULT_LABEL: Record<string, { label: string; tone: 'green' | 'amber' | 'red' | 'blue' }> = {
-  cocok: { label: 'Cocok', tone: 'green' },
+  cocok: { label: 'Disetujui', tone: 'green' },
   ada_perubahan: { label: 'Ada perubahan', tone: 'amber' },
   perlu_survei: { label: 'Perlu survei', tone: 'blue' },
   selesai: { label: 'Selesai', tone: 'green' },

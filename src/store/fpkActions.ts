@@ -178,12 +178,31 @@ const deputyBlocked = (tx: Tx, refId: string, kind: 'setujui_fpk' | 'setujui_mem
 
 export { deputyBlocked, DEPUTY_WAIT };
 export function buildFpkActions(exec: (fn: (tx: Tx) => Result) => Result) {
-  /** Simpan draf FPK (baru atau ubah draf). */
+  /** Simpan draf FPK (baru atau ubah draf). Draft bebas disimpan kapan saja tanpa validasi ketat. */
   const saveFpkDraft = (input: FpkInput, fpkId?: string) => exec(tx => {
-    if (!has(tx.me, 'Marketing')) return fail('Hanya Marketing yang membuat FPK.');
-    const err = validateInput(tx, input);
-    if (err) return fail(err);
-    const { clientId, siteId } = resolveClientSite(tx, input);
+    let clientId = input.clientId || '';
+    let siteId = input.siteId || '';
+    if (input.newClient) {
+      clientId = tx.id('c');
+      tx.s.clients.push({
+        id: clientId, code: input.newClient.code.toUpperCase(), name: input.newClient.name, accountOwnerId: tx.me.id, coOwnerIds: [],
+        billingAddress: input.newClient.billingAddress, termDays: num(tx, 'client.payment_terms_days', 30), note: 'Dibuat Marketing dari form FPK', active: true,
+      });
+    }
+    if (input.newSite) {
+      siteId = tx.id('s');
+      tx.s.sites.push({
+        id: siteId, code: input.newSite.code.toUpperCase(), name: input.newSite.name, address: input.newSite.address, clientId: clientId || tx.s.clients[0]?.id || '',
+        areaId: input.newSite.areaId, note: 'Dibuat Marketing dari form FPK', active: true
+      });
+    }
+    if (!clientId && tx.s.clients.length > 0) {
+      clientId = tx.s.clients[0].id;
+    }
+    if (!siteId && tx.s.sites.length > 0) {
+      siteId = (clientId && tx.s.sites.find(s => s.clientId === clientId)?.id) || tx.s.sites[0].id;
+    }
+
     if (fpkId) {
       const f = fpkOf(tx, fpkId);
       if (!f || f.status !== 'draf') return fail('Hanya draf yang bisa diubah langsung.');

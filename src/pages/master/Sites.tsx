@@ -58,7 +58,7 @@ export const SitesPage: React.FC = () => {
         title="Site"
         subtitle="Lokasi jaga. Setiap site milik satu klien dan diurus satu area."
         actions={<>
-          <ExportBtn onClick={() => exportCsv('site.csv', [['Kode', 'Nama', 'Klien', 'Area', 'Alamat', 'Status'], ...rows.map(s => [s.code, s.name, lookups.client.get(s.clientId)?.name ?? '', lookups.area.get(s.areaId)?.name ?? '', s.address, s.active ? 'Aktif' : 'Nonaktif'])])} />
+          <ExportBtn onClick={() => exportCsv('site.csv', [['Kode', 'Site', 'Alamat', 'Klien', 'Area', 'Status'], ...rows.map(s => [s.code, s.name, s.address, lookups.client.get(s.clientId)?.name ?? '', lookups.area.get(s.areaId)?.name ?? '', s.active ? 'Aktif' : 'Nonaktif'])])} />
           {editable && <Btn size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setEdit('new')}>Tambah site</Btn>}
         </>}
       />
@@ -74,13 +74,15 @@ export const SitesPage: React.FC = () => {
         </Select>
       </div>
       <Card pad={false}>
-        <Table head={['Kode', 'Site', 'Klien', 'Area', 'Status', '']}>
+        <Table head={['Kode', 'Site', 'Alamat', 'Klien', 'Area', 'Status', '']}>
           {rows.map(s => (
             <tr key={s.id} className={muted(s.active)}>
               <Td className="font-mono text-xs">{s.code}</Td>
               <Td>
                 <Link to={`/site/${s.id}`} className="font-semibold text-indigo-700 hover:underline">{s.name}</Link>
-                <div className="text-xs text-slate-500">{s.address}</div>
+              </Td>
+              <Td>
+                <div className="text-sm text-slate-600 max-w-sm">{s.address}</div>
               </Td>
               <Td><Link to={`/klien/${s.clientId}`} className="hover:underline">{lookups.client.get(s.clientId)?.name}</Link></Td>
               <Td><Link to={`/area/${s.areaId}`} className="hover:underline">{lookups.area.get(s.areaId)?.name}</Link></Td>

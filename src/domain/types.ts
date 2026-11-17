@@ -53,6 +53,8 @@ export interface Client {
   npwp?: string;
   termDays: number;
   picContact?: string;
+  picEmail?: string;
+  picPhone?: string;
   note?: string;
   active: boolean;
 }

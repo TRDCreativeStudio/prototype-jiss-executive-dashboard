@@ -40,8 +40,8 @@ export const Topbar: React.FC<{ onMenu: () => void }> = ({ onMenu }) => {
           <Menu className="w-5 h-5" />
         </button>
         <div className="relative" ref={dateRef}>
-          <button onClick={() => setDateOpen(o => !o)} className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-md px-2 py-1" aria-label="Kontrol tanggal simulasi">
-            <CalendarDays className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Tanggal simulasi:</span> {fmtDate(TODAY)} <ChevronDown className="w-3 h-3" />
+          <button onClick={() => setDateOpen(o => !o)} className="inline-flex items-center gap-1.5 text-xs font-medium text-amber-300 bg-slate-950 hover:bg-slate-900 border border-slate-800 rounded-md px-2.5 py-1" aria-label="Kontrol tanggal simulasi">
+            <CalendarDays className="w-3.5 h-3.5 text-amber-400" /> <span className="hidden sm:inline text-slate-300">Tanggal simulasi:</span> <span className="font-semibold text-amber-300">{fmtDate(TODAY)}</span> <ChevronDown className="w-3 h-3 text-slate-400" />
           </button>
           {dateOpen && (
             <div className="absolute left-0 mt-2 w-72 bg-white border border-slate-200 rounded-xl shadow-lg overflow-hidden z-40">
@@ -64,14 +64,14 @@ export const Topbar: React.FC<{ onMenu: () => void }> = ({ onMenu }) => {
       <div className="flex items-center gap-2">
         <div className="relative" ref={bellRef}>
           <button onClick={() => setBellOpen(o => !o)} className="relative p-2 rounded-lg text-slate-600 hover:bg-slate-100" aria-label="Notifikasi">
-            <Bell className="w-5 h-5" />
-            {unread > 0 && <span className="absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center">{unread}</span>}
+            <Bell className="w-5 h-5 text-slate-700" />
+            {unread > 0 && <span className="absolute top-1 right-1 min-w-4 h-4 px-1 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black flex items-center justify-center border border-slate-900">{unread}</span>}
           </button>
           {bellOpen && (
             <div className="absolute right-0 mt-2 w-[min(22rem,calc(100vw-2rem))] bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
                 <span className="text-sm font-bold">Notifikasi</span>
-                <button className="text-xs font-semibold text-indigo-600" onClick={() => actions.markAllRead()}>Tandai semua dibaca</button>
+                <button className="text-xs font-semibold text-amber-700 hover:text-amber-800" onClick={() => actions.markAllRead()}>Tandai semua dibaca</button>
               </div>
               <div className="max-h-96 overflow-y-auto divide-y divide-slate-100">
                 {myNotifications.length === 0 && <p className="text-sm text-slate-500 p-4">Belum ada notifikasi.</p>}
@@ -81,7 +81,7 @@ export const Topbar: React.FC<{ onMenu: () => void }> = ({ onMenu }) => {
                     <button
                       key={n.id}
                       onClick={() => { if (link) { navigate(link); setBellOpen(false); } }}
-                      className={cx('w-full text-left px-4 py-3 hover:bg-slate-50', !n.readBy.includes(me.id) && 'bg-indigo-50/50')}
+                      className={cx('w-full text-left px-4 py-3 hover:bg-slate-50', !n.readBy.includes(me.id) && 'bg-amber-50/60')}
                     >
                       <div className="text-[13px] text-slate-800">{n.text}</div>
                       <div className="text-[11px] text-slate-500 mt-1">{fmtDateTime(n.at)}</div>
@@ -95,7 +95,7 @@ export const Topbar: React.FC<{ onMenu: () => void }> = ({ onMenu }) => {
 
         <div className="relative" ref={userRef}>
           <button onClick={() => setUserOpen(o => !o)} className="flex items-center gap-2 pl-2 pr-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50" aria-label="Ganti user simulasi">
-            <span className="w-7 h-7 rounded-full bg-slate-900 text-white text-[11px] font-bold flex items-center justify-center">
+            <span className="w-7 h-7 rounded-full bg-slate-950 text-amber-400 border border-amber-400/40 text-[11px] font-black flex items-center justify-center shadow-xs">
               {me.name.split(' ').map(x => x[0]).slice(0, 2).join('')}
             </span>
             <span className="hidden sm:block text-left">
@@ -115,7 +115,7 @@ export const Topbar: React.FC<{ onMenu: () => void }> = ({ onMenu }) => {
                   <button
                     key={u.id}
                     onClick={() => { actions.switchUser(u.id); setUserOpen(false); navigate(homeFor(u.roles)); }}
-                    className={cx('w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center justify-between gap-2', u.id === me.id && 'bg-indigo-50')}
+                    className={cx('w-full text-left px-4 py-2 hover:bg-slate-50 flex items-center justify-between gap-2', u.id === me.id && 'bg-amber-50/80 font-semibold')}
                   >
                     <span className="min-w-0">
                       <span className="block text-[13px] font-semibold text-slate-800 truncate">{u.name}</span>

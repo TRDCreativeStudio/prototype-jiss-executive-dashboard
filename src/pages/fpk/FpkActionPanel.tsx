@@ -52,7 +52,7 @@ const OpsPanel: React.FC<{ f: Fpk }> = ({ f }) => {
           <label key={k} className={cx('flex items-start gap-2 text-sm border rounded-lg px-3 py-2 cursor-pointer', result === k ? 'border-indigo-400 bg-indigo-50/50' : 'border-slate-200')}>
             <input type="radio" checked={result === k} onChange={() => setResult(k)} className="mt-1" />
             <span>
-              <b>{k === 'cocok' ? 'Cocok' : k === 'ada_perubahan' ? 'Ada perubahan' : 'Perlu survei dulu'}</b>
+              <b>{k === 'cocok' ? 'Disetujui' : k === 'ada_perubahan' ? 'Ada perubahan' : 'Perlu survei dulu'}</b>
               <span className="block text-xs text-slate-500">
                 {k === 'cocok' ? 'Kebutuhan personel sesuai kondisi lokasi.' : k === 'ada_perubahan' ? 'Tulis selisih per baris dan alasannya. Informasi ini dibawa ke Finance dan BOD.' : 'Membuat tugas survei untuk Operasional (2 hari kerja). Cek margin Finance menunggu sampai survei selesai.'}
               </span>
