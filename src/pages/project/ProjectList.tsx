@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
+import { ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { Badge, Card, ExportBtn, PageHeader, SearchBox, Select, Table, Td, exportCsv, StatusChip, Tr, TableEmpty, CellMain } from '../../ui/kit';
+import { Card, ExportBtn, PageHeader, SearchBox, Select, Table, Tabs, Td, exportCsv, Tr, TableEmpty, CellMain, usePaged } from '../../ui/kit';
 import { ProjectSidePanel } from './ProjectSidePanel';
-import { latest } from '../../domain/selectors';
 import { fmtDate } from '../../domain/time';
-import { settingNum } from '../../domain/settings';
-import { getFpkStatusDisplay } from '../fpk/FpkList';
-import { SPK_STATUS } from '../../domain/labels';
+import { projectStatus, isProjectSite, type ProjectStatus } from '../../domain/project';
+import { ProjectActionCell, ProjectChip } from './projectUi';
+
+type TabKey = 'berjalan' | 'perpanjangan' | 'persiapan' | 'selesai';
 
 // Label filter lebih pendek di layar HP
 const useIsMobile = () => {
@@ -21,186 +22,132 @@ const useIsMobile = () => {
   return mobile;
 };
 
-const filterCls = (desktopWidth: string) => `min-w-0 px-1.5! text-xs sm:px-3! sm:text-sm ${desktopWidth}`;
-
-export const ProjectListPage: React.FC = () => {
+/**
+ * Project = pekerjaan di satu site. Tab membagi project menurut tahap kerja,
+ * bukan menurut status dokumen (status dokumen ada di halaman FPK / SPK / Memo).
+ */
+export const ProjectListPage: React.FC<{ initialTab?: TabKey }> = ({ initialTab }) => {
   const isMobile = useIsMobile();
-  const { state, lookups, access, me, myTasks } = useStore();
-  const minMargin = settingNum(state.settings, 'margin.minimum_pct', 10);
-  const mine = new Set(myTasks.filter(x => x.task.refType === 'fpk').map(x => x.task.refId));
-  // FPK yang mewakili proyek: yang masih berproses/berjalan, kalau tidak ada pakai yang terbaru
-  const projectFpk = (siteId: string) => {
-    const list = state.fpks.filter(f => latest(f).siteId === siteId);
-    return list.find(f => !['selesai', 'batal', 'ditolak'].includes(f.status)) ?? list[list.length - 1];
-  };
-  // SPK yang mewakili proyek: yang perlu revisi/diproses lebih dulu, lalu yang aktif, lalu terbaru
-  const projectSpk = (siteId: string) => {
-    const list = state.spks.filter(sp => sp.siteId === siteId);
-    return list.find(sp => sp.status === 'perlu_revisi')
-      ?? list.find(sp => sp.status === 'diinput')
-      ?? list.find(sp => sp.status === 'aktif')
-      ?? list[list.length - 1];
-  };
-  const fpkLabel = (siteId: string) => {
-    const f = projectFpk(siteId);
-    return f ? getFpkStatusDisplay(f, state, lookups, me, mine, minMargin).label : 'Tanpa FPK';
-  };
-  const spkLabel = (siteId: string) => {
-    const sp = projectSpk(siteId);
-    return sp ? SPK_STATUS[sp.status].label : 'Belum ada SPK';
-  };
-
+  const { state, lookups, access, me } = useStore();
+  const isMarketing = me.roles.includes('Marketing');
+  const [tab, setTab] = useState<TabKey>(() => {
+    const q = new URLSearchParams(window.location.search).get('tab') as TabKey | null;
+    const t = initialTab ?? q;
+    return t && ['berjalan', 'perpanjangan', 'persiapan', 'selesai'].includes(t) ? t : 'berjalan';
+  });
   const [q, setQ] = useState('');
   const [area, setArea] = useState('');
-  const [status, setStatus] = useState<'' | 'aktif' | 'nonaktif'>('');
-  const [fpkFilter, setFpkFilter] = useState('');
-  const [spkFilter, setSpkFilter] = useState('');
+  const [owner, setOwner] = useState<'all' | 'mine'>('all');
+  const [periodSort, setPeriodSort] = useState<'asc' | 'desc' | null>(null);
   const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
 
-  const getProjectPeriod = (siteId: string) => {
-    const spk = state.spks.find(sp => sp.siteId === siteId && sp.status === 'aktif')
-      ?? state.spks.find(sp => sp.siteId === siteId);
-    if (spk) {
-      return `${fmtDate(spk.periodStart)} – ${fmtDate(spk.periodEnd)}`;
-    }
-    const fpk = state.fpks.find(f => latest(f).siteId === siteId && f.status !== 'batal' && f.status !== 'ditolak');
-    if (fpk) {
-      const v = latest(fpk);
-      return `${fmtDate(v.periodStart)} – ${fmtDate(v.periodEnd)}`;
-    }
-    return '–';
+  const changeTab = (k: TabKey) => {
+    setTab(k);
+    const url = new URL(window.location.href);
+    if (k === 'berjalan') url.searchParams.delete('tab'); else url.searchParams.set('tab', k);
+    window.history.replaceState(null, '', url.pathname + url.search);
   };
 
-  // Proyek = site yang punya minimal 1 FPK atau SPK (proyek lahir dari FPK; data awal lewat SPK)
-  const projects = state.sites
-    .filter(s =>
-      state.fpks.some(f => latest(f).siteId === s.id) ||
-      state.spks.some(sp => sp.siteId === s.id)
-    )
-    .filter(s => access.area(s.areaId));
-  // Pilihan filter diambil dari status yang benar-benar tampil, supaya selalu sama dengan chip
-  const fpkOptions = [...new Set(projects.map(s => fpkLabel(s.id)))].sort();
-  const spkOptions = [...new Set(projects.map(s => spkLabel(s.id)))].sort();
+  const isMine = (clientId: string) => { const c = lookups.client.get(clientId); return !!c && (c.accountOwnerId === me.id || c.coOwnerIds.includes(me.id)); };
 
-  const rows = projects
-    .filter(s => !fpkFilter || fpkLabel(s.id) === fpkFilter)
-    .filter(s => !spkFilter || spkLabel(s.id) === spkFilter)
-    .filter(s => (!area || s.areaId === area))
-    .filter(s => {
-      if (status === 'aktif') return s.active;
-      if (status === 'nonaktif') return !s.active;
-      return true;
-    })
-    .filter(s => {
-      const client = lookups.client.get(s.clientId);
-      const query = q.toLowerCase();
-      const period = getProjectPeriod(s.id);
-      return (
-        s.name.toLowerCase().includes(query) ||
-        s.address.toLowerCase().includes(query) ||
-        (client?.name ?? '').toLowerCase().includes(query) ||
-        (client?.picEmail ?? '').toLowerCase().includes(query) ||
-        period.toLowerCase().includes(query)
-      );
-    });
+  // Semua project + tahapnya (satu sumber untuk tab, tabel, dan side modal)
+  const all: ProjectStatus[] = state.sites
+    .filter(s => access.area(s.areaId) && isProjectSite(s, state))
+    .map(s => projectStatus(s, state));
+  const filtered = all
+    .filter(p => !area || p.site.areaId === area)
+    .filter(p => owner === 'all' || isMine(p.site.clientId))
+    .filter(p => `${p.site.name} ${p.site.address} ${lookups.client.get(p.site.clientId)?.name ?? ''}`.toLowerCase().includes(q.toLowerCase()));
 
-  const exportData = () => {
-    exportCsv('project.csv', [
-      ['Proyek', 'Klien', 'Periode', 'Status', 'Status FPK', 'Status SPK'],
-      ...rows.map(s => {
-        const client = lookups.client.get(s.clientId);
-        const period = getProjectPeriod(s.id);
-        return [
-          s.name,
-          client?.name ?? '',
-          period,
-          s.active ? 'Aktif' : 'Nonaktif',
-          fpkLabel(s.id),
-          spkLabel(s.id),
-        ];
-      }),
-    ]);
+  const inTab: Record<TabKey, (p: ProjectStatus) => boolean> = {
+    berjalan: p => p.phase === 'berjalan' || p.phase === 'perpanjangan',
+    perpanjangan: p => p.phase === 'perpanjangan',
+    persiapan: p => p.phase === 'persiapan',
+    selesai: p => p.phase === 'selesai',
   };
+  const count = (k: TabKey) => filtered.filter(inTab[k]).length;
+
+  const rows = filtered.filter(inTab[tab]).sort((a, b) => {
+    if (!periodSort) return 0;
+    if (!a.period || !b.period) return a.period ? -1 : b.period ? 1 : 0;
+    const r = a.period.start.localeCompare(b.period.start) || a.period.end.localeCompare(b.period.end);
+    return periodSort === 'asc' ? r : -r;
+  });
+  const { pageRows, pager } = usePaged(rows);
+
+  const periodHeader = (
+    <button type="button" onClick={() => setPeriodSort(d => (d === null ? 'asc' : d === 'asc' ? 'desc' : null))}
+      title={periodSort === 'asc' ? 'Urut: terlama dulu' : periodSort === 'desc' ? 'Urut: terbaru dulu' : 'Urutkan periode'}
+      className="group inline-flex items-center gap-1 font-semibold uppercase tracking-wide hover:text-slate-800 cursor-pointer select-none">
+      <span>Periode</span>
+      {periodSort === 'asc' ? <ArrowUp className="w-3 h-3 text-slate-700" />
+        : periodSort === 'desc' ? <ArrowDown className="w-3 h-3 text-slate-700" />
+        : <ArrowUpDown className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />}
+    </button>
+  );
+
+  const exportData = () => exportCsv('project.csv', [
+    ['Proyek', 'Klien', 'Area', 'Periode', 'Tahap', 'Perlu tindakan'],
+    ...rows.map(p => [
+      p.site.name,
+      lookups.client.get(p.site.clientId)?.name ?? '',
+      lookups.area.get(p.site.areaId)?.name ?? '',
+      p.period ? `${fmtDate(p.period.start)} – ${fmtDate(p.period.end)}` : '',
+      p.chip.label,
+      p.action?.label ?? '',
+    ]),
+  ]);
 
   return (
-    <div className="space-y-4">
+    <div>
       <PageHeader
         title="Project"
-        subtitle="Daftar proyek serta status kelengkapan dokumen FPK dan SPK."
+        subtitle="Pekerjaan pengamanan per site, dari persiapan, jaga, kontrak, sampai perpanjangan."
         actions={<ExportBtn onClick={exportData} />}
       />
 
-      <div className="flex flex-col sm:flex-row gap-2">
-        <SearchBox value={q} onChange={setQ} placeholder={isMobile ? 'Cari proyek / klien' : 'Cari proyek atau klien...'} />
-        {/* Mobile: 4 filter sejajar dengan label pendek; desktop: satu baris dengan pencarian */}
-        <div className="grid grid-cols-4 gap-2 sm:contents">
-          <Select value={area} onChange={e => setArea(e.target.value)} className={filterCls('sm:w-48')} aria-label="Filter area">
-            <option value="">Area</option>
-            {state.areas.filter(a => access.area(a.id)).map(a => (
-              <option key={a.id} value={a.id}>{a.name}</option>
-            ))}
-          </Select>
-          <Select value={status} onChange={e => setStatus(e.target.value as '' | 'aktif' | 'nonaktif')} className={filterCls('sm:w-48')} aria-label="Filter status proyek">
-            <option value="">{isMobile ? 'Proyek' : 'Status proyek'}</option>
-            <option value="aktif">Aktif</option>
-            <option value="nonaktif">Nonaktif</option>
-          </Select>
-          <Select value={fpkFilter} onChange={e => setFpkFilter(e.target.value)} className={filterCls('sm:w-44')} aria-label="Filter status FPK">
-            <option value="">{isMobile ? 'FPK' : 'Status FPK'}</option>
-            {fpkOptions.map(o => <option key={o} value={o}>{o}</option>)}
-          </Select>
-          <Select value={spkFilter} onChange={e => setSpkFilter(e.target.value)} className={filterCls('sm:w-44')} aria-label="Filter status SPK">
-            <option value="">{isMobile ? 'SPK' : 'Status SPK'}</option>
-            {spkOptions.map(o => <option key={o} value={o}>{o}</option>)}
-          </Select>
-        </div>
-      </div>
+      <Tabs value={tab} onChange={k => changeTab(k as TabKey)} tabs={[
+        { key: 'berjalan', label: `Berjalan (${count('berjalan')})` },
+        { key: 'perpanjangan', label: `Menjelang berakhir (${count('perpanjangan')})` },
+        { key: 'persiapan', label: `Persiapan (${count('persiapan')})` },
+        { key: 'selesai', label: `Selesai (${count('selesai')})` },
+      ]} />
 
-      <Card pad={false}>
-        <Table head={['Proyek', 'Klien', 'Periode', 'Status', 'Status FPK', 'Status SPK']}>
-          {rows.map(s => {
-            const client = lookups.client.get(s.clientId);
-            const fpk = projectFpk(s.id);
-            const fpkStatus = fpk ? getFpkStatusDisplay(fpk, state, lookups, me, mine, minMargin) : null;
-            const spk = projectSpk(s.id);
-            const period = getProjectPeriod(s.id);
+      {(
+        <>
+          <div className="flex flex-col sm:flex-row gap-2 mb-3">
+            <SearchBox value={q} onChange={setQ} placeholder={isMobile ? 'Cari proyek / klien' : 'Cari proyek atau klien...'} />
+            <div className={isMarketing ? 'grid grid-cols-2 gap-2 sm:contents' : 'sm:contents'}>
+              <Select value={area} onChange={e => setArea(e.target.value)} className="sm:w-48" aria-label="Filter area">
+                <option value="">Semua area</option>
+                {state.areas.filter(a => access.area(a.id)).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </Select>
+              {isMarketing && (
+                <Select value={owner} onChange={e => setOwner(e.target.value as 'all' | 'mine')} className="sm:w-48" aria-label="Filter pemilik klien">
+                  <option value="all">Semua klien</option>
+                  <option value="mine">Klien saya</option>
+                </Select>
+              )}
+            </div>
+          </div>
 
-            return (
-              <Tr key={s.id} selected={selectedSiteId === s.id} onClick={() => setSelectedSiteId(s.id)}>
-                <Td>
-                  <CellMain>{s.name}</CellMain>
-                </Td>
-                <Td>
-                  <span className="text-sm font-medium text-slate-800">{client?.name ?? '–'}</span>
-                </Td>
-                <Td className="whitespace-nowrap">
-                  <span className="text-slate-700">{period}</span>
-                </Td>
-                <Td>
-                  <Badge tone={s.active ? 'green' : 'slate'}>
-                    {s.active ? 'Aktif' : 'Nonaktif'}
-                  </Badge>
-                </Td>
-                <Td>
-                  {fpkStatus ? (
-                    <StatusChip tone={fpkStatus.tone} label={fpkStatus.label} hint={fpkStatus.hint} />
-                  ) : (
-                    <Badge tone="slate">Tanpa FPK</Badge>
-                  )}
-                </Td>
-                <Td>
-                  {spk ? (
-                    <Badge tone={SPK_STATUS[spk.status].tone}>{SPK_STATUS[spk.status].label}</Badge>
-                  ) : (
-                    <Badge tone="slate">Belum ada SPK</Badge>
-                  )}
-                </Td>
-              </Tr>
-            );
-          })}
-        </Table>
-        {rows.length === 0 && <TableEmpty>Tidak ada proyek yang sesuai pencarian.</TableEmpty>}
-      </Card>
+          <Card pad={false}>
+            <Table head={['Proyek', 'Klien', periodHeader, 'Tahap', 'Perlu tindakan']} widths={['19%', '20%', '21%', '17%', '23%']} minWidth="720px">
+              {pageRows.map(p => (
+                <Tr key={p.site.id} selected={selectedSiteId === p.site.id} onClick={() => setSelectedSiteId(p.site.id)}>
+                  <Td><CellMain>{p.site.name}</CellMain></Td>
+                  <Td className="text-sm text-slate-800">{lookups.client.get(p.site.clientId)?.name ?? '–'}</Td>
+                  <Td className="whitespace-nowrap text-sm text-slate-700">{p.period ? `${fmtDate(p.period.start)} – ${fmtDate(p.period.end)}` : '–'}</Td>
+                  <Td className="whitespace-nowrap"><ProjectChip ps={p} /></Td>
+                  <Td><ProjectActionCell ps={p} /></Td>
+                </Tr>
+              ))}
+            </Table>
+            {rows.length === 0 && <TableEmpty>Tidak ada project di tahap ini.</TableEmpty>}
+            {pager}
+          </Card>
+        </>
+      )}
 
       {/* Quick view project: side modal dari kanan */}
       {selectedSiteId && <ProjectSidePanel siteId={selectedSiteId} onClose={() => setSelectedSiteId(null)} />}

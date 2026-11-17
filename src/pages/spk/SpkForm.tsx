@@ -204,17 +204,15 @@ export const SpkFormPage: React.FC<{ reviseId?: string }> = ({ reviseId }) => {
   );
 
   return (
-    <div className="max-w-[1120px] mx-auto px-4 md:px-8 pt-4 sm:pt-7 pb-24">
-      {/* Header */}
-      <div className="mb-5 sm:mb-6 flex items-start sm:items-center gap-3">
-        <button type="button" onClick={() => navigate(backTo)} className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors shrink-0" aria-label="Kembali">
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
-            {reviseId ? `Revisi ${old!.number}` : draft ? 'Lanjutkan draft SPK' : 'Input SPK'}
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5">Isi sesuai dokumen SPK dari klien.</p>
+    <div className="pb-40 lg:pb-24">
+      {/* Header sama dengan halaman lain (PageHeader): Kembali, judul, deskripsi */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
+        <div className="min-w-0">
+          <button type="button" onClick={() => navigate(backTo)} className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 mb-2">
+            <ArrowLeft className="w-3.5 h-3.5" /> Kembali
+          </button>
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">{reviseId ? `Revisi ${old!.number}` : draft ? 'Lanjutkan draft SPK' : 'Input SPK'}</h1>
+          <div className="text-sm text-slate-500 mt-1">Isi sesuai dokumen SPK dari klien.</div>
         </div>
       </div>
 
@@ -517,14 +515,14 @@ export const SpkFormPage: React.FC<{ reviseId?: string }> = ({ reviseId }) => {
 
       {/* Mobile: bar bawah tetap (sama dengan form FPK) */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 px-4 py-3 shadow-lg">
-        <div className="flex items-center justify-between gap-2 max-w-lg mx-auto">
-          <button type="button" onClick={() => setSheetOpen(o => !o)} className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
+        <div className="max-w-lg mx-auto space-y-2.5">
+          <button type="button" onClick={() => setSheetOpen(o => !o)} className="w-full flex items-center justify-between text-sm font-semibold text-slate-700">
             <span>{remaining === 0 ? 'Siap dikirim' : `${remaining} hal belum lengkap`}</span>
-            <ChevronUp className={cx('w-4 h-4 transition-transform', sheetOpen && 'rotate-180')} />
+            <span className="inline-flex items-center gap-1 text-[13px] font-medium text-slate-500">Lihat <ChevronUp className={cx('w-4 h-4 transition-transform', sheetOpen && 'rotate-180')} /></span>
           </button>
-          <div className="flex items-center gap-2">
-            {!reviseId && <Btn size="sm" variant="secondary" onClick={saveDraft}>Simpan draft</Btn>}
-            <Btn size="sm" onClick={submit}>Kirim</Btn>
+          <div className={cx('grid gap-2', reviseId ? 'grid-cols-1' : 'grid-cols-2')}>
+            {!reviseId && <Btn variant="secondary" className="whitespace-nowrap" onClick={saveDraft}>Simpan draft</Btn>}
+            <Btn className="whitespace-nowrap" onClick={submit}>Kirim</Btn>
           </div>
         </div>
       </div>

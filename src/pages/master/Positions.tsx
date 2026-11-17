@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Plus, Pencil } from 'lucide-react';
+import { Plus, Info } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { Btn, Card, ErrorText, ExportBtn, Field, Input, Modal, PageHeader, Table, Td, exportCsv, runAction, Tr, CellCode } from '../../ui/kit';
-import { ActiveBadge, muted } from './common';
+import { Btn, Card, ErrorText, ExportBtn, Field, Input, Modal, PageHeader, Table, Td, exportCsv, runAction, Tr, CellCode, CellMain, usePaged, SearchBox, HintIcon, TableEmpty } from '../../ui/kit';
+import { quotaByPosition } from '../../domain/selectors';
+import { EditIconBtn, useActiveTabs } from './common';
 import type { Position } from '../../domain/types';
 
 const EditModal: React.FC<{ row: Position | null; onClose: () => void }> = ({ row, onClose }) => {
@@ -26,31 +27,47 @@ const EditModal: React.FC<{ row: Position | null; onClose: () => void }> = ({ ro
 
 export const PositionsPage: React.FC = () => {
   const { state, access } = useStore();
+  const [q, setQ] = useState('');
   const [edit, setEdit] = useState<Position | null | 'new'>(null);
   const editable = access.can('master.edit');
-  const rows = state.positions;
+  const searched = state.positions.filter(r => `${r.code} ${r.name} ${r.description ?? ''}`.toLowerCase().includes(q.toLowerCase()));
+  const { tabs, rows } = useActiveTabs(searched);
+  // Pemakaian: kuota di SPK yang berlaku + security aktif (alasan jabatan tidak bisa dihapus)
+  const allSites = new Set(state.sites.map(s => s.id));
+  const quota = quotaByPosition(state.spks, allSites);
+  const actual = new Map<string, number>();
+  state.personnel.filter(p => p.status === 'aktif').forEach(p => actual.set(p.positionId, (actual.get(p.positionId) ?? 0) + 1));
+  const { pageRows, pager } = usePaged(rows);
   return (
-    <div className="space-y-5">
-      <PageHeader title="Jabatan" subtitle="Posisi security di baris FPK dan SPK. Dibuat master supaya hitungan kuota per jabatan konsisten. Hanya Admin sistem yang bisa mengubah." />
-      <Card
-        pad={false}
-        actions={<div className="flex gap-2">
-          <ExportBtn onClick={() => exportCsv('jabatan.csv', [['Kode', 'Nama', 'Keterangan', 'Status'], ...rows.map(r => [r.code, r.name, r.description ?? '', r.active ? 'Aktif' : 'Nonaktif'])])} />
-          {editable && <Btn size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setEdit('new')}>Tambah</Btn>}
-        </div>}
-        title={`Daftar jabatan (${rows.length})`}
-      >
-        <Table head={['Kode', 'Nama', 'Keterangan', 'Status', '']}>
-          {rows.map(r => (
-            <Tr key={r.id} muted={!r.active}>
+    <div>
+      <PageHeader
+        title="Jabatan"
+        subtitle={<span className="inline-flex items-center gap-1.5">
+          Posisi security yang dipakai di formasi FPK dan SPK.
+          <HintIcon icon={Info} className="text-slate-400" text="Dibuat master supaya hitungan kuota per jabatan konsisten. Hanya Admin sistem yang bisa mengubah. Jabatan nonaktif tidak muncul di form baru, tapi tetap tampil di dokumen lama." />
+        </span>}
+        actions={<>
+          <ExportBtn onClick={() => exportCsv('jabatan.csv', [['Kode', 'Nama', 'Keterangan', 'Kuota SPK aktif', 'Security aktif', 'Status'], ...searched.map(r => [r.code, r.name, r.description ?? '', quota.get(r.id) ?? 0, actual.get(r.id) ?? 0, r.active ? 'Aktif' : 'Nonaktif'])])} />
+          {editable && <Btn size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setEdit('new')}>Tambah jabatan</Btn>}
+        </>}
+      />
+      {tabs}
+      <div className="flex flex-col sm:flex-row gap-2 mb-3"><SearchBox value={q} onChange={setQ} placeholder="Cari jabatan" /></div>
+      <Card pad={false}>
+        <Table head={['Kode', 'Jabatan', 'Keterangan', 'Kuota SPK aktif', 'Security aktif', '']}>
+          {pageRows.map(r => (
+            <Tr key={r.id} onClick={editable ? () => setEdit(r) : undefined}>
               <Td><CellCode>{r.code}</CellCode></Td>
-              <Td className="font-semibold">{r.name}</Td>
+              <Td><CellMain>{r.name}</CellMain></Td>
               <Td className="text-[13px] text-slate-500">{r.description ?? '–'}</Td>
-              <Td><ActiveBadge active={r.active} /></Td>
-              <Td>{editable && <Btn size="sm" variant="ghost" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => setEdit(r)}>Ubah</Btn>}</Td>
+              <Td className="tabular-nums">{quota.get(r.id) ?? 0}</Td>
+              <Td className="tabular-nums">{actual.get(r.id) ?? 0}</Td>
+              <Td className="text-right">{editable && <EditIconBtn onClick={() => setEdit(r)} label={`Ubah ${r.name}`} />}</Td>
             </Tr>
           ))}
         </Table>
+        {rows.length === 0 && <TableEmpty>Tidak ada jabatan.</TableEmpty>}
+        {pager}
       </Card>
       {edit && <EditModal row={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />}
     </div>

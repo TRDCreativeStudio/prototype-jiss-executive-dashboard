@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { Send, CheckCircle2, ThumbsUp, Undo2, TrendingDown, Plus, Paperclip, Trash2, Handshake, XCircle, MessageSquare } from 'lucide-react';
+import { Send, CheckCircle2, ThumbsUp, Undo2, TrendingDown, Plus, Paperclip, Trash2, Handshake, XCircle, MessageSquare, Info } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { AttachmentChip, Badge, Btn, Card, DL, ErrorText, Field, Input, Money, PageHeader, Table, Tabs, Td, Tr, CellMain, CellSub, CellCode, TableEmpty, cx, toast, DateInput } from '../../ui/kit';
+import { AttachmentChip, Badge, Btn, Card, DL, ErrorText, Field, Input, Money, PageHeader, Table, Tabs, Td, Tr, CellMain, CellSub, CellCode, TableEmpty, cx, toast, DateInput, usePaged, SearchBox, Select, StatusChip, HintIcon, Stepper } from '../../ui/kit';
+import { ProjectLinkCard } from '../project/projectUi';
+import { MemoSidePanel, MEMO_TYPE_SHORT, countdown, memoNextStep, memoStatusChip, memoSteps, useMemoDeadlines } from './memoUi';
 import { ReasonModal } from '../../ui/ReasonModal';
 import { Link, navigate } from '../../router';
 import { NotFound } from '../Misc';
@@ -43,72 +45,110 @@ const useMemoDates = () => {
 
 export const MemoListPage: React.FC = () => {
   const { state, lookups, access, me } = useStore();
-  const [tab, setTab] = useState('berjalan');
-  const dates = useMemoDates();
-  const visibleSpk = (spkId: string) => { const s = lookups.spk.get(spkId); return !!s && access.area(lookups.site.get(s.siteId)?.areaId ?? ''); };
+  const [tab, setTab] = useState<'berjalan' | 'selesai'>('berjalan');
+  const [q, setQ] = useState('');
+  const [area, setArea] = useState('');
+  const [owner, setOwner] = useState<'mine' | 'all'>(has(me, 'Marketing') ? 'mine' : 'all');
+  const [spkPanel, setSpkPanel] = useState<string | null>(null);
+  const [memoPanel, setMemoPanel] = useState<string | null>(null);
+  const deadlines = useMemoDeadlines();
   const startDays = settingNum(state.settings, 'memo.start_days_before_end', 75);
-  const due = effectiveSpks(state.spks).filter(s =>
-    visibleSpk(s.id) && diffDays(TODAY, s.periodEnd) <= startDays && !state.memos.some(m => m.spkId === s.id));
-  const memos = state.memos.filter(m => visibleSpk(m.spkId));
-  const rows = memos.filter(m => tab === 'semua' || (tab === 'berjalan' ? m.status !== 'dijawab' : m.status === 'dijawab'));
+  const sendDays = settingNum(state.settings, 'memo.send_deadline_days_before_end', 60);
+  const answerDays = settingNum(state.settings, 'memo.answer_deadline_days_before_end', 30);
+
   const isMine = (clientId: string) => { const c = lookups.client.get(clientId); return !!c && (c.accountOwnerId === me.id || c.coOwnerIds.includes(me.id)); };
+  // Filter bersama untuk SPK (tab Perlu memo) dan memo
+  const passSpk = (spkId: string) => {
+    const sp = lookups.spk.get(spkId); if (!sp) return false;
+    const site = lookups.site.get(sp.siteId);
+    if (!site || !access.area(site.areaId)) return false;
+    if (area && site.areaId !== area) return false;
+    if (owner === 'mine' && !isMine(sp.clientId)) return false;
+    const hay = `${sp.number} ${lookups.client.get(sp.clientId)?.name} ${site.name}`.toLowerCase();
+    return hay.includes(q.toLowerCase());
+  };
+
+  // Perlu memo: SPK aktif yang sudah masuk H-75 dan belum punya memo.
+  // Batas = tugas memo bila ada (SPK data awal: 5 hari kerja sejak import), selain itu H-60.
+  const memoTask = (spkId: string) => state.tasks.find(t => t.kind === 'memo' && t.refId === spkId && t.status === 'terbuka');
+  const need = effectiveSpks(state.spks)
+    .filter(sp => diffDays(TODAY, sp.periodEnd) <= startDays && !state.memos.some(m => m.spkId === sp.id))
+    .filter(sp => passSpk(sp.id))
+    .map(sp => ({ sp, due: memoTask(sp.id)?.dueAt ?? deadlines(sp.periodEnd).send, initial: !!sp.isInitialData }))
+    .sort((a, b) => a.due.localeCompare(b.due));
+
+  const memos = state.memos.filter(m => passSpk(m.spkId));
+  const running = memos.filter(m => m.status !== 'dijawab');
+  const done = memos.filter(m => m.status === 'dijawab');
+  const rows = tab === 'berjalan' ? running : done;
+
+  const { pageRows: pageNeed, pager: pagerNeed } = usePaged(need);
+  const { pageRows, pager } = usePaged(rows);
 
   return (
     <div>
-      <PageHeader title="Memo eksternal" subtitle="Keputusan perpanjang atau akhiri harus selesai sekitar dua bulan sebelum SPK habis: tugas di H-75, terkirim paling lambat H-60, dijawab paling lambat H-30." />
-      <Card title={`SPK masuk H-${startDays} tanpa memo (${due.length})`} pad={false} className="mb-5">
-        <Table head={['No. SPK', 'Klien', 'Site', 'Berakhir', 'Batas kirim (H-60)', '']}>
-          {due.map(s => {
-            const d = dates(s.periodEnd);
-            const late = diffDays(d.send, TODAY) > 0;
-            return (
-              <Tr key={s.id} to={`/spk/${s.id}`} tone={late ? 'red' : undefined}>
-                <Td><CellCode>{s.number}</CellCode></Td>
-                <Td><CellMain>{lookups.client.get(s.clientId)?.name}</CellMain></Td>
-                <Td>{lookups.site.get(s.siteId)?.name}</Td>
-                <Td className="whitespace-nowrap">{fmtDate(s.periodEnd)}<CellSub>{diffDays(TODAY, s.periodEnd)} hari lagi</CellSub></Td>
-                <Td className={cx('whitespace-nowrap', late && 'text-rose-600 font-semibold')}>{fmtDate(d.send)}{late && <CellSub className="text-rose-600">lewat, eskalasi BOD</CellSub>}</Td>
-                <Td className="text-right">{has(me, 'Marketing') && isMine(s.clientId) && <Btn size="sm" onClick={() => navigate(`/memo/baru?spk=${s.id}`)}>Pilih jenis memo</Btn>}</Td>
-              </Tr>
-            );
-          })}
-        </Table>
-        {due.length === 0 && <TableEmpty>Tidak ada SPK yang perlu memo.</TableEmpty>}
-      </Card>
-      <Tabs value={tab} onChange={setTab} tabs={[
-        { key: 'berjalan', label: `Berjalan (${memos.filter(m => m.status !== 'dijawab').length})` },
-        { key: 'selesai', label: 'Sudah dijawab' },
-        { key: 'semua', label: 'Semua' },
+      <PageHeader
+        title="Memo eksternal"
+        subtitle={<span className="inline-flex items-center gap-1.5">
+          Surat ke klien untuk memperpanjang atau mengakhiri kontrak sebelum SPK berakhir.
+          <HintIcon icon={Info} className="text-slate-400" text={`Tugas memo muncul di H-${startDays}, memo terkirim paling lambat H-${sendDays}, dan jawaban klien paling lambat H-${answerDays} sebelum SPK berakhir. Lewat batas: eskalasi ke BOD.`} />
+        </span>}
+      />
+      <Tabs value={tab} onChange={k => setTab(k as typeof tab)} tabs={[
+        { key: 'berjalan', label: `Berjalan (${running.length})` },
+        { key: 'selesai', label: `Selesai (${done.length})` },
       ]} />
-      <Card pad={false}>
-        <Table head={['No. memo', 'SPK', 'Klien', 'Jenis', 'Status', 'Nilai baru', 'Tenggat']}>
-          {rows.map(m => {
-            const s = lookups.spk.get(m.spkId)!;
-            const d = dates(s.periodEnd);
-            const v = m.versions[m.versions.length - 1];
-            return (
-              <Tr key={m.id} to={`/memo/${m.id}`}>
-                <Td>
-                  {m.number ? <CellCode>{m.number}</CellCode> : <span className="text-slate-500">Draf</span>}
-                  {m.parentMemoId && <CellSub>nego atas {lookups.memo.get(m.parentMemoId)?.number}</CellSub>}
-                </Td>
-                <Td><CellCode>{s.number}</CellCode></Td>
-                <Td><CellMain>{lookups.client.get(s.clientId)?.name}</CellMain></Td>
-                <Td>{MEMO_TYPE[m.type]}</Td>
-                <Td>
-                  <Badge tone={MEMO_STATUS[m.status].tone}>{MEMO_STATUS[m.status].label}</Badge>
-                  {m.clientAnswer && <CellSub>{m.clientAnswer === 'setuju' ? 'Klien setuju' : m.clientAnswer === 'nego' ? 'Klien nego' : 'Tidak lanjut'}</CellSub>}
-                </Td>
-                <Td className="whitespace-nowrap">{m.type.startsWith('perpanjangan') ? <Money value={v.newValue} clientId={s.clientId} /> : '–'}</Td>
-                <Td className="whitespace-nowrap">
-                  {m.status === 'terkirim' ? <>Jawaban: {fmtDate(d.answer)}</> : m.status === 'dijawab' ? '–' : <>Kirim: {fmtDate(d.send)}</>}
-                </Td>
-              </Tr>
-            );
-          })}
-        </Table>
-        {rows.length === 0 && <TableEmpty>Tidak ada memo.</TableEmpty>}
-      </Card>
+
+      <div className="flex flex-col sm:flex-row gap-2 mb-3">
+        <SearchBox value={q} onChange={setQ} placeholder="Cari" />
+        <Select value={area} onChange={e => setArea(e.target.value)} className="sm:w-48" aria-label="Filter area">
+          <option value="">Semua area</option>
+          {state.areas.filter(a => access.area(a.id)).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </Select>
+        <Select value={owner} onChange={e => setOwner(e.target.value as 'mine' | 'all')} className="sm:w-48" aria-label="Filter klien">
+          <option value="mine">Klien saya</option>
+          <option value="all">Semua klien</option>
+        </Select>
+      </div>
+
+      {(
+        <Card pad={false}>
+          <Table head={['No. memo', 'Klien', 'Site', 'Jenis', 'Status', 'Nilai baru', 'Tahap berikutnya']}>
+            {pageRows.map(m => {
+              const sp = lookups.spk.get(m.spkId)!;
+              const v = m.versions[m.versions.length - 1];
+              const next = memoNextStep(m, sp, deadlines(sp.periodEnd));
+              const c = next.due ? countdown(next.due) : null;
+              const parent = m.parentMemoId ? lookups.memo.get(m.parentMemoId) : undefined;
+              return (
+                <Tr key={m.id} selected={memoPanel === m.id} onClick={() => setMemoPanel(m.id)}>
+                  <Td>
+                    {m.number ? <CellCode>{m.number}</CellCode> : <span className="text-sm text-slate-500">Draf</span>}
+                    <CellSub>{parent ? `Nego · merujuk ${parent.number}` : sp.number}</CellSub>
+                  </Td>
+                  <Td><CellMain>{lookups.client.get(sp.clientId)?.name}</CellMain></Td>
+                  <Td>{lookups.site.get(sp.siteId)?.name}</Td>
+                  <Td className="whitespace-nowrap">{MEMO_TYPE_SHORT[m.type]}</Td>
+                  <Td className="whitespace-nowrap">{memoStatusChip(m)}</Td>
+                  <Td className="whitespace-nowrap">
+                    {m.type === 'perpanjangan_ump' ? <Money value={v.newValue} clientId={sp.clientId} /> : m.type === 'perpanjangan_sama' ? 'Sama' : '–'}
+                  </Td>
+                  <Td className="whitespace-nowrap">
+                    <span className={cx('text-sm', c?.late ? 'text-rose-600 font-semibold' : 'text-slate-800')} title={next.due ? `Batas ${fmtDate(next.due)}` : undefined}>
+                      {next.text}{c && <span className={cx(!c.late && 'text-slate-500')}> · {c.text}</span>}
+                    </span>
+                  </Td>
+                </Tr>
+              );
+            })}
+          </Table>
+          {rows.length === 0 && <TableEmpty>{tab === 'berjalan' ? 'Tidak ada memo yang sedang berjalan.' : 'Belum ada memo yang dijawab klien.'}</TableEmpty>}
+          {pager}
+        </Card>
+      )}
+      {/* SPK yang perlu memo ada di Project › Menjelang berakhir dan di Tugas Saya */}
+
+      {memoPanel && <MemoSidePanel memoId={memoPanel} onClose={() => setMemoPanel(null)} />}
     </div>
   );
 };
@@ -279,8 +319,6 @@ export const MemoDetailPage: React.FC<{ id: string }> = ({ id }) => {
   const d = dates(s.periodEnd);
   const v = m.versions[m.versions.length - 1];
   const children = state.memos.filter(x => x.parentMemoId === m.id);
-  const steps = ['draf', 'cek_margin', 'menunggu_bod', 'disetujui', 'terkirim', 'dijawab'].filter(x => m.type === 'perpanjangan_ump' || x !== 'cek_margin');
-  const idx = steps.indexOf(m.status);
   const extend = m.type.startsWith('perpanjangan');
 
   return (
@@ -290,13 +328,8 @@ export const MemoDetailPage: React.FC<{ id: string }> = ({ id }) => {
         title={m.number ?? 'Draf memo'}
         subtitle={<span className="flex flex-wrap items-center gap-2"><Badge tone={MEMO_STATUS[m.status].tone}>{MEMO_STATUS[m.status].label}</Badge>{MEMO_TYPE[m.type]} · dibuat {lookups.user.get(m.createdBy)?.name}, {fmtDate(m.createdAt)}</span>}
       />
-      <div className="flex overflow-x-auto gap-1 pb-1">
-        {steps.map((x, i) => (
-          <div key={x} className={cx('flex-1 min-w-[90px] text-center text-[11px] font-semibold rounded-md py-1.5 border', i < idx ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : i === idx ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200 text-slate-400')}>
-            {MEMO_STATUS[x as Memo['status']].label}
-          </div>
-        ))}
-      </div>
+      <Stepper {...memoSteps(m)} />
+      <ProjectLinkCard siteId={s.siteId} />
       {m.status === 'dijawab' && (
         <div className={cx('flex items-start gap-2 text-sm rounded-xl px-4 py-3 border', m.clientAnswer === 'setuju' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : m.clientAnswer === 'nego' ? 'bg-amber-50 border-amber-200 text-amber-900' : 'bg-rose-50 border-rose-200 text-rose-900')}>
           <MessageSquare className="w-4 h-4 mt-0.5" />

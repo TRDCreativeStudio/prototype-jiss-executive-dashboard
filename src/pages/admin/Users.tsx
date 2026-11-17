@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Pencil, Send } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { Badge, Btn, Card, ErrorText, Field, Input, Modal, PageHeader, SearchBox, Table, Td, runAction, toast, Tr } from '../../ui/kit';
+import { Badge, Btn, Card, ErrorText, Field, Input, Modal, PageHeader, SearchBox, Table, Td, runAction, toast, Tr, usePaged } from '../../ui/kit';
 import { ROLES, type Role, type User } from '../../domain/types';
 import { isDeputy } from '../../domain/rbac';
 import { muted } from '../master/common';
@@ -63,6 +63,7 @@ export const UsersPage: React.FC = () => {
   const [edit, setEdit] = useState<User | null | 'new'>(null);
   const editable = access.can('admin.edit');
   const rows = state.users.filter(u => `${u.name} ${u.email} ${u.roles.join(' ')}`.toLowerCase().includes(q.toLowerCase()));
+  const { pageRows, pager } = usePaged(rows);
   return (
     <div>
       <PageHeader
@@ -73,7 +74,7 @@ export const UsersPage: React.FC = () => {
       <div className="mb-3"><SearchBox value={q} onChange={setQ} placeholder="Cari nama, email, peran" /></div>
       <Card pad={false}>
         <Table head={['Nama', 'Peran', 'Kepala divisi', 'Lingkup area', 'Status', '']}>
-          {rows.map(u => (
+          {pageRows.map(u => (
             <Tr key={u.id} muted={!u.active}>
               <Td>
                 <div className="font-semibold">{u.name}</div>
@@ -99,6 +100,7 @@ export const UsersPage: React.FC = () => {
             </Tr>
           ))}
         </Table>
+        {pager}
       </Card>
       {edit && <UserForm user={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />}
     </div>

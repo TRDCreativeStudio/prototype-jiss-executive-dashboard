@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Plus, Pencil, Copy, Check } from 'lucide-react';
+import { Plus, Pencil, Copy, Check, Info, UserCheck, MapPin, FileText, Receipt } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { Badge, Btn, Card, DL, ErrorText, ExportBtn, Field, Input, Modal, PageHeader, SearchBox, Select, Table, Td, Textarea, exportCsv, runAction, cx, Tr, CellMain, CellCode } from '../../ui/kit';
+import { Btn, Card, ErrorText, ExportBtn, Field, Input, Modal, PageHeader, SearchBox, Select, Table, Td, Textarea, exportCsv, runAction, cx, Tr, CellMain, CellCode, usePaged, HintIcon, HoverTip, SummaryCard, TableEmpty, toast } from '../../ui/kit';
+import { InfoCard, InfoRow, CopyBtn, LINK } from '../project/projectUi';
 import { Link } from '../../router';
-import { ActiveBadge, FpkMiniTable, SpkMiniTable, muted, runningIn } from './common';
+import { ActiveBadge, EditIconBtn, FpkMiniTable, SpkMiniTable, runningIn, useActiveTabs } from './common';
 import { NotFound } from '../Misc';
 import { settingNum } from '../../domain/settings';
 import type { Client, Division } from '../../domain/types';
@@ -91,102 +92,84 @@ export const ClientForm: React.FC<{ client: Client | null; onClose: () => void }
 };
 
 export const ClientsPage: React.FC = () => {
-  const { state, lookups, access } = useStore();
+  const { state, lookups, access, me } = useStore();
+  const isMarketing = me.roles.includes('Marketing');
   const [q, setQ] = useState('');
   const [area, setArea] = useState('');
+  const [owner, setOwner] = useState<'all' | 'mine'>('all');
   const [edit, setEdit] = useState<Client | null | 'new'>(null);
   const editable = access.can('master.edit');
   const visibleSites = state.sites.filter(s => access.area(s.areaId));
-  const rows = state.clients
+  const isMine = (c: Client) => c.accountOwnerId === me.id || c.coOwnerIds.includes(me.id);
+  const searched = state.clients
     .filter(c => visibleSites.some(s => s.clientId === c.id) || access.allAreas())
     .filter(c => !area || state.sites.some(s => s.clientId === c.id && s.areaId === area))
-    .filter(c => `${c.code} ${c.name}`.toLowerCase().includes(q.toLowerCase()));
+    .filter(c => owner === 'all' || isMine(c))
+    .filter(c => `${c.code} ${c.name} ${c.picContact ?? ''}`.toLowerCase().includes(q.toLowerCase()));
+  const { tabs, rows } = useActiveTabs(searched);
 
+  const { pageRows, pager } = usePaged(rows);
   return (
     <div>
       <PageHeader
         title="Klien"
-        subtitle="Perusahaan yang membayar jasa. Satu klien bisa punya site di beberapa area."
+        subtitle={<span className="inline-flex items-center gap-1.5">
+          Perusahaan yang membayar jasa. Satu klien bisa punya site di beberapa area.
+          {access.can('fpk.create') && <HintIcon icon={Info} className="text-slate-400" text="Marketing membuat klien dan site baru langsung dari form FPK. Perubahan berikutnya oleh Admin sistem." />}
+        </span>}
         actions={<>
-          <ExportBtn onClick={() => exportCsv('klien.csv', [['Kode', 'Nama', 'Kontak PIC', 'Email PIC', 'No. HP PIC', 'Jumlah site', 'Termin', 'Account owner', 'Status'], ...rows.map(c => [c.code, c.name, c.picContact ?? '', c.picEmail ?? '', c.picPhone ?? '', state.sites.filter(s => s.clientId === c.id).length, `${c.termDays} hari`, lookups.user.get(c.accountOwnerId)?.name ?? '', c.active ? 'Aktif' : 'Nonaktif'])])} />
+          <ExportBtn onClick={() => exportCsv('klien.csv', [['Kode', 'Nama', 'Kontak PIC', 'Email PIC', 'No. HP PIC', 'Jumlah site', 'Termin', 'Account owner', 'Status'], ...searched.map(c => [c.code, c.name, c.picContact ?? '', c.picEmail ?? '', c.picPhone ?? '', state.sites.filter(s => s.clientId === c.id).length, `${c.termDays} hari`, lookups.user.get(c.accountOwnerId)?.name ?? '', c.active ? 'Aktif' : 'Nonaktif'])])} />
           {editable && <Btn size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setEdit('new')}>Tambah klien</Btn>}
         </>}
       />
-      {access.can('fpk.create') && (
-        <p className="text-xs text-slate-600 bg-slate-100 rounded-lg px-3 py-2 mb-3">Marketing membuat klien dan site baru langsung dari form FPK. Perubahan berikutnya oleh Admin sistem.</p>
-      )}
+      {tabs}
       <div className="flex flex-col sm:flex-row gap-2 mb-3">
-        <SearchBox value={q} onChange={setQ} placeholder="Cari kode atau nama klien" />
-        <Select value={area} onChange={e => setArea(e.target.value)} className="sm:w-56">
+        <SearchBox value={q} onChange={setQ} placeholder="Cari klien atau kontak" />
+        <Select value={area} onChange={e => setArea(e.target.value)} className="sm:w-48" aria-label="Filter area">
           <option value="">Semua area</option>
           {state.areas.filter(a => access.area(a.id)).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
         </Select>
+        {isMarketing && (
+          <Select value={owner} onChange={e => setOwner(e.target.value as 'all' | 'mine')} className="sm:w-48" aria-label="Filter pemilik klien">
+            <option value="all">Semua klien</option>
+            <option value="mine">Klien saya</option>
+          </Select>
+        )}
       </div>
       <Card pad={false}>
-        <Table head={['Kode', 'Nama', 'Kontak PIC', 'Email & No. HP', 'Site per area', 'Termin', 'Account owner', 'Status', '']}>
-          {rows.map(c => {
+        <Table head={['Kode', 'Klien', 'Kontak PIC', 'Site', 'Account owner', '']}>
+          {pageRows.map(c => {
             const sites = state.sites.filter(s => s.clientId === c.id);
             const areas = [...new Set(sites.map(s => s.areaId))];
-            const breakdownTooltip = areas.map(aid => `${lookups.area.get(aid)?.name} ${sites.filter(s => s.areaId === aid).length}`).join('\n');
-
+            const breakdown = areas.map(aid => `${lookups.area.get(aid)?.name} ${sites.filter(s => s.areaId === aid).length}`).join(' · ');
             return (
-              <Tr key={c.id} to={`/klien/${c.id}`} muted={!c.active}>
+              <Tr key={c.id} to={`/klien/${c.id}`}>
                 <Td><CellCode>{c.code}</CellCode></Td>
                 <Td><CellMain>{c.name}</CellMain></Td>
                 <Td>
-                  <div className="text-slate-800 text-sm font-medium">{c.picContact || '–'}</div>
-                </Td>
-                <Td>
-                  <div className="flex flex-col gap-1 text-[13px]">
-                    {c.picEmail ? (
-                      <CopyableItem text={c.picEmail} label="email" />
-                    ) : null}
-                    {c.picPhone ? (
-                      <CopyableItem text={c.picPhone} label="nomor HP" isMono />
-                    ) : null}
-                    {!c.picEmail && !c.picPhone && <span className="text-slate-400">–</span>}
-                  </div>
-                </Td>
-                <Td>
-                  {sites.length === 0 ? (
-                    <span className="text-slate-400 text-sm">0 site</span>
-                  ) : (
-                    <div
-                      className="relative group/site inline-block cursor-help"
-                      title={breakdownTooltip}
-                    >
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition-colors">
-                        {sites.length} site
-                      </span>
-
-                      {/* Tooltip Hover Breakdown */}
-                      <div className="absolute left-0 top-full mt-1.5 hidden group-hover/site:block z-30 bg-slate-900 text-white text-xs rounded-lg py-2 px-3 shadow-xl pointer-events-none min-w-[150px]">
-                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1 border-b border-slate-700 pb-0.5">
-                          Rincian per Area
-                        </div>
-                        <div className="space-y-1">
-                          {areas.map(aid => (
-                            <div key={aid} className="flex items-center justify-between gap-3 text-slate-200">
-                              <span>{lookups.area.get(aid)?.name ?? 'Area'}</span>
-                              <span className="font-bold text-amber-300">{sites.filter(s => s.areaId === aid).length}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                  <div className="text-sm text-slate-800">{c.picContact || <span className="text-slate-400">–</span>}</div>
+                  {(c.picEmail || c.picPhone) && (
+                    <div className="flex flex-wrap items-center gap-x-3 mt-0.5">
+                      {c.picEmail && <CopyableItem text={c.picEmail} label="email" />}
+                      {c.picPhone && <CopyableItem text={c.picPhone} label="nomor HP" />}
                     </div>
                   )}
                 </Td>
-                <Td className="whitespace-nowrap">{c.termDays} hari</Td>
-                <Td>
-                  <div className="font-medium text-slate-800">{lookups.user.get(c.accountOwnerId)?.name ?? '–'}</div>
-                  {c.coOwnerIds.length > 0 && <div className="text-[13px] text-slate-500 mt-0.5">Co-owner: {c.coOwnerIds.map(id => lookups.user.get(id)?.name).join(', ')}</div>}
+                <Td className="whitespace-nowrap">
+                  {sites.length === 0 ? <span className="text-sm text-slate-400">–</span>
+                    : <HoverTip text={breakdown}><span className="text-sm text-slate-800 underline decoration-dotted decoration-slate-300 underline-offset-4 cursor-help">{sites.length} site</span></HoverTip>}
                 </Td>
-                <Td><ActiveBadge active={c.active} /></Td>
-                <Td>{editable && <Btn size="sm" variant="ghost" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => setEdit(c)}>Ubah</Btn>}</Td>
+                <Td>
+                  <div className="text-sm text-slate-800">{lookups.user.get(c.accountOwnerId)?.name ?? '–'}</div>
+                  {c.coOwnerIds.length > 0 && <div className="text-[13px] text-slate-500 mt-0.5">+ {c.coOwnerIds.map(id => lookups.user.get(id)?.name).join(', ')}</div>}
+                </Td>
+                <Td className="text-right">{editable && <EditIconBtn onClick={() => setEdit(c)} label={`Ubah ${c.name}`} />}</Td>
               </Tr>
             );
           })}
         </Table>
+        {rows.length === 0 && <TableEmpty>Tidak ada klien.</TableEmpty>}
+        {pager}
       </Card>
       {edit && <ClientForm client={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />}
     </div>
@@ -204,42 +187,52 @@ export const ClientDetail: React.FC<{ id: string }> = ({ id }) => {
   const running = runningIn(state, new Set(sites.map(s => s.id)));
   const areas = [...new Set(sites.map(s => s.areaId))];
   const defaults = state.assignments.filter(a => a.clientId === id && !a.siteId);
+  const activeSpk = running.spks.filter(s => s.status === 'aktif').length;
+  const copy = (text: string, what: string) => { navigator.clipboard?.writeText(text); toast(`${what} disalin`); };
 
   return (
     <div className="space-y-5">
       <PageHeader
         back="/klien"
         title={c.name}
-        subtitle={<span className="font-mono text-xs">{c.code}</span>}
+        subtitle={<span className="inline-flex items-center gap-2"><span className="font-mono text-[13px]">{c.code}</span>{!c.active && <ActiveBadge active={false} />}</span>}
         actions={access.can('master.edit') && <Btn size="sm" variant="secondary" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => setEdit(true)}>Ubah</Btn>}
       />
-      <Card>
-        <DL items={[
-          ['Account owner', lookups.user.get(c.accountOwnerId)?.name],
-          ['Co-owner', c.coOwnerIds.map(x => lookups.user.get(x)?.name).join(', ') || '–'],
-          ['Termin bayar', `${c.termDays} hari kalender`],
-          ['Alamat penagihan', c.billingAddress],
-          ['NPWP', c.npwp ?? '–'],
-          ['Kontak PIC klien', c.picContact ?? '–'],
-          ['Email PIC', c.picEmail ?? '–'],
-          ['No. HP PIC', c.picPhone ?? '–'],
-          ['Status', <ActiveBadge active={c.active} />],
-        ]} />
-      </Card>
-      <Card title="Divisi terkait (default untuk semua site klien ini)" actions={<Link to="/admin/divisi-terkait" className="text-xs font-semibold text-indigo-600">Atur</Link>}>
-        <DL items={DIVS.map(d => [d, lookups.user.get(defaults.find(x => x.division === d)?.userId ?? '')?.name ?? <span className="text-slate-400">Belum diisi, tugas jatuh ke kepala divisi</span>])} />
-      </Card>
-      <Card title={`Site per area (${sites.length})`} pad={false}>
-        <Table head={['Area', 'Site', 'Alamat', 'Status']}>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        <SummaryCard icon={UserCheck} label="Account owner" value={lookups.user.get(c.accountOwnerId)?.name ?? '–'} valueClass="text-base"
+          sub={c.coOwnerIds.length ? `+ ${c.coOwnerIds.map(x => lookups.user.get(x)?.name).join(', ')}` : undefined} />
+        <SummaryCard icon={MapPin} label="Site" value={`${sites.length} site`} valueClass="text-base" sub={`${areas.length} area`} />
+        <SummaryCard icon={FileText} label="SPK aktif" value={activeSpk} valueClass="text-base" sub={running.fpks.length ? `${running.fpks.length} FPK berjalan` : undefined} />
+        <SummaryCard icon={Receipt} label="Termin bayar" value={`${c.termDays} hari`} valueClass="text-base" sub="hari kalender" />
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <InfoCard title="Kontak & penagihan">
+          <InfoRow label="PIC klien">{c.picContact ?? '–'}</InfoRow>
+          <InfoRow label="Email">{c.picEmail ? <span className="inline-flex items-center gap-1">{c.picEmail}<CopyBtn label="Salin email" onClick={() => copy(c.picEmail!, 'Email')} /></span> : '–'}</InfoRow>
+          <InfoRow label="No. HP">{c.picPhone ? <span className="inline-flex items-center gap-1">{c.picPhone}<CopyBtn label="Salin nomor HP" onClick={() => copy(c.picPhone!, 'Nomor HP')} /></span> : '–'}</InfoRow>
+          <InfoRow label="Alamat tagihan">{c.billingAddress || '–'}</InfoRow>
+          <InfoRow label="NPWP">{c.npwp ?? '–'}</InfoRow>
+          {c.note && <InfoRow label="Catatan">{c.note}</InfoRow>}
+        </InfoCard>
+        <InfoCard title="Divisi terkait (default semua site)">
+          {DIVS.map(d => {
+            const u = lookups.user.get(defaults.find(x => x.division === d)?.userId ?? '');
+            return <InfoRow key={d} label={d}>{u?.name ?? <span className="text-slate-500">Belum diisi · kepala divisi</span>}</InfoRow>;
+          })}
+          {access.can('master.view') && <Link to="/admin/divisi-terkait" className={LINK}>Atur divisi terkait</Link>}
+        </InfoCard>
+      </div>
+      <Card title={`Site (${sites.length})`} pad={false}>
+        <Table head={['Area', 'Site', 'Alamat']}>
           {areas.flatMap(aid => sites.filter(s => s.areaId === aid).map((s, i) => (
             <Tr key={s.id} to={`/site/${s.id}`} muted={!s.active}>
               <Td>{i === 0 && <CellMain>{lookups.area.get(aid)?.name}</CellMain>}</Td>
-              <Td><CellMain>{s.name}</CellMain></Td>
+              <Td className="text-sm text-slate-800">{s.name}{!s.active && <span className="text-slate-500"> · nonaktif</span>}</Td>
               <Td className="text-[13px] text-slate-500">{s.address}</Td>
-              <Td><ActiveBadge active={s.active} /></Td>
             </Tr>
           )))}
         </Table>
+        {sites.length === 0 && <TableEmpty>Belum ada site.</TableEmpty>}
       </Card>
       {access.can('fpk.view') && <FpkMiniTable fpks={running.fpks} />}
       {access.can('spk.view') && <SpkMiniTable spks={running.spks} title="SPK aktif dan dalam proses" />}

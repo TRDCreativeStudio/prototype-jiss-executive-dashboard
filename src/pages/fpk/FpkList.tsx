@@ -1,20 +1,23 @@
 import type { Tone } from '../../domain/labels';
 import React, { useState, useEffect } from 'react';
-import { Plus, Download, AlertTriangle, X, ExternalLink, MapPin, Paperclip, Undo2, Pencil, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Download, AlertTriangle, Undo2, Pencil, ArrowUpDown, ArrowUp, ArrowDown, Clock, CheckCircle2, Wallet, Users, CalendarDays, CalendarCheck } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { Badge, Btn, Card, Money, PageHeader, SearchBox, Select, Table, Tabs, Td, ExportBtn, exportCsv, cx, useAnimatedClose, StatusChip, ActivityLog, type StatusHint, Tr, TableEmpty } from '../../ui/kit';
+import { Badge, Btn, Card, Money, PageHeader, SearchBox, Select, Table, Tabs, Td, ExportBtn, exportCsv, cx, useAnimatedClose, StatusChip, ActivityLog, type StatusHint, Tr, TableEmpty, PanelTopBar, SummaryCard, AttachmentChip, usePaged, Stepper, stepWindow } from '../../ui/kit';
 import { fpkActivity } from '../../domain/activity';
+import { ProjectLinkCard } from '../project/projectUi';
 import { Link, navigate } from '../../router';
-import { FPK_STATUS, FPK_TYPE } from '../../domain/labels';
+import { FPK_STATUS, FPK_TYPE, SPK_STATUS } from '../../domain/labels';
 import { fpkCoverage, fpkHeadcount, latest } from '../../domain/selectors';
 import { diffDays, fmtDate, TODAY } from '../../domain/time';
 import { settingNum } from '../../domain/settings';
 import type { Division, Fpk, Task, Spk, Setting, Holiday, Client, User, Site } from '../../domain/types';
 
-const ACTIVE: Fpk['status'][] = ['cek_divisi', 'cek_margin', 'menunggu_bod', 'dikembalikan', 'disetujui', 'berjalan', 'tertutup_sebagian'];
-const ARCHIVED: Fpk['status'][] = ['selesai', 'ditolak', 'batal'];
+// Tab daftar FPK mengikuti alur dokumen
+const ACTIVE: Fpk['status'][] = ['cek_divisi', 'cek_margin', 'menunggu_bod', 'dikembalikan'];
+const APPROVED: Fpk['status'][] = ['disetujui', 'berjalan', 'tertutup_sebagian', 'selesai'];
+const ARCHIVED: Fpk['status'][] = ['ditolak', 'batal'];
 
-const RESULT_TEXT: Record<string, string> = { cocok: 'Disetujui', ada_perubahan: 'Ada perubahan', selesai: 'Selesai', kembalikan: 'Dikembalikan', tidak_layak: 'Tidak layak' };
+const RESULT_TEXT: Record<string, string> = { cocok: 'Disetujui', ada_perubahan: 'Ada perubahan', perlu_survei: 'Perlu survei', selesai: 'Selesai', kembalikan: 'Dikembalikan', tidak_layak: 'Tidak layak' };
 
 export const CheckChips: React.FC<{ f: Fpk; labeled?: boolean }> = ({ f, labeled }) => {
   const v = latest(f);
@@ -49,10 +52,114 @@ export const CheckChips: React.FC<{ f: Fpk; labeled?: boolean }> = ({ f, labeled
   );
 };
 
-/** Side Panel (Drawer) 40% untuk quick preview FPK sebelum masuk ke detail page */
+/** Alur dokumen FPK: berhenti di Disetujui. Setelah itu pekerjaan berlanjut di Project. */
+export const FPK_STEPS: { key: string; label: string }[] = [
+  { key: 'draf', label: 'Draf' },
+  { key: 'cek_divisi', label: 'Cek divisi' },
+  { key: 'cek_margin', label: 'Cek margin' },
+  { key: 'menunggu_bod', label: 'Menunggu BOD' },
+  { key: 'disetujui', label: 'Disetujui' },
+];
+
+/** Props stepper FPK. Dikembalikan = di tahap cek divisi dengan tanda kuning; selesai = semua langkah tuntas. */
+export const fpkStepProps = (f: Fpk) => {
+  const returned = f.status === 'dikembalikan';
+  const idx = FPK_STEPS.findIndex(x => x.key === f.status);
+  const approved = ['disetujui', 'berjalan', 'tertutup_sebagian', 'selesai'].includes(f.status);
+  return {
+    steps: FPK_STEPS.map(x => (returned && x.key === 'cek_divisi' ? 'Dikembalikan' : x.label)),
+    current: approved ? FPK_STEPS.length : returned ? 1 : Math.max(0, idx),
+    warn: returned,
+  };
+};
+
+/**
+ * Cek divisi per versi: chip + "nama · tanggal" (atau batas), catatan pemeriksa bila ada.
+ * `withNotes` menampilkan catatan/alasan; margin Finance hanya untuk yang berhak (BOD/Finance).
+ */
+export const DivisionChecks: React.FC<{ f: Fpk; versionNo?: number; withNotes?: boolean; showMargin?: boolean }> = ({ f, versionNo, withNotes, showMargin }) => {
+  const { state, lookups } = useStore();
+  const vNo = versionNo ?? latest(f).no;
+  const v = f.versions.find(x => x.no === vNo) ?? latest(f);
+  const isLatest = vNo === latest(f).no;
+  const openTasks = state.tasks.filter(t => t.refId === f.id && t.status === 'terbuka');
+  const userName = (id?: string) => (id ? lookups.user.get(id)?.name : undefined) ?? '–';
+  const divs: Division[] = ['Operasional', 'Recruitment', 'Pengadaan', 'Finance'];
+  const row = (d: Division) => {
+    const r = [...f.reviews].reverse().find(x => x.versionNo === vNo && x.division === d);
+    if (f.status === 'draf' && isLatest) return { tone: 'slate' as Tone, label: 'Belum dikirim', meta: '', note: undefined as string | undefined };
+    if (r) {
+      const tone: Tone = r.result === 'kembalikan' ? 'amber' : r.result === 'tidak_layak' ? 'red' : r.result === 'ada_perubahan' || r.result === 'perlu_survei' ? 'amber' : 'green';
+      const extra = d === 'Finance' && showMargin && v.estMarginPct !== undefined ? ` · margin ${v.estMarginPct.toLocaleString('id-ID')}%` : '';
+      return { tone, label: RESULT_TEXT[r.result] ?? 'Selesai', meta: `${userName(r.actorId)} · ${fmtDate(r.at)}${extra}`,
+        note: [r.note, r.readyDate ? `Siap ${fmtDate(r.readyDate)}` : ''].filter(Boolean).join(' · ') || undefined };
+    }
+    if (!isLatest) return { tone: 'slate' as Tone, label: '–', meta: '', note: undefined };
+    const pending = f.pendingDivisions.includes(d) || (d === 'Finance' && f.status === 'cek_margin');
+    if (pending) {
+      const t = openTasks.find(x => x.division === d || x.assigneeRole === d);
+      return { tone: 'blue' as Tone, label: 'Menunggu', meta: t ? `batas ${fmtDate(t.dueAt)}` : '', note: undefined };
+    }
+    if (d === 'Finance' && ['cek_divisi', 'dikembalikan'].includes(f.status)) return { tone: 'slate' as Tone, label: 'Belum', meta: 'setelah 3 divisi selesai', note: undefined };
+    return { tone: 'slate' as Tone, label: 'Belum', meta: '', note: undefined };
+  };
+  return (
+    <ul className="divide-y divide-slate-100">
+      {divs.map(d => {
+        const r = row(d);
+        return (
+          <li key={d} className="py-2 text-sm">
+            <div className="flex items-center gap-3">
+              <span className="w-36 shrink-0 text-slate-800">{DIV_LABEL[d]}</span>
+              <Badge tone={r.tone}>{r.label}</Badge>
+              <span className="flex-1 text-right text-[13px] text-slate-500 truncate">{r.meta}</span>
+            </div>
+            {withNotes && r.note && <p className="text-[13px] text-slate-600 mt-1">{r.note}</p>}
+          </li>
+        );
+      })}
+      {f.bodDecision && isLatest && (
+        <li className="py-2 text-sm">
+          <div className="flex items-center gap-3">
+            <span className="w-36 shrink-0 text-slate-800">BOD</span>
+            <Badge tone={f.bodDecision.decision === 'setujui' ? 'green' : f.bodDecision.decision === 'tolak' ? 'red' : 'amber'}>
+              {f.bodDecision.decision === 'setujui' ? 'Disetujui' : f.bodDecision.decision === 'tolak' ? 'Ditolak' : f.bodDecision.decision}
+            </Badge>
+            <span className="flex-1 text-right text-[13px] text-slate-500 truncate">
+              {userName(f.bodDecision.by)}{f.bodDecision.onBehalfOf ? ' (atas nama BOD)' : ''} · {fmtDate(f.bodDecision.at)}
+            </span>
+          </div>
+          {withNotes && f.bodDecision.note && <p className="text-[13px] text-slate-600 mt-1">{f.bodDecision.note}</p>}
+        </li>
+      )}
+    </ul>
+  );
+};
+
+/** Bagian di dalam side modal: judul 14px, dipisah garis tipis (tanpa kotak). */
+const PanelSection: React.FC<{ title: string; right?: React.ReactNode; children: React.ReactNode }> = ({ title, right, children }) => (
+  <section className="pt-5 border-t border-slate-100">
+    <div className="flex items-center justify-between gap-2 mb-3">
+      <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+      {right && <span className="text-[13px] text-slate-500">{right}</span>}
+    </div>
+    {children}
+  </section>
+);
+
+const DIV_LABEL: Record<Division, string> = { Operasional: 'Operasional', Recruitment: 'Recruitment', Pengadaan: 'Pengadaan', Finance: 'Finance (margin)' };
+const NEXT_TONE = {
+  amber: 'bg-amber-50 border-amber-200 text-amber-900',
+  blue: 'bg-blue-50 border-blue-200 text-blue-900',
+  green: 'bg-emerald-50 border-emerald-200 text-emerald-900',
+  red: 'bg-rose-50 border-rose-200 text-rose-900',
+  slate: 'bg-slate-50 border-slate-200 text-slate-800',
+} as const;
+
+/** Side modal FPK: identitas di header, langkah berikutnya, ringkasan, cek divisi, formasi, SPK, lampiran, log. */
 export const FpkSidePanel: React.FC<{ fpkId: string; onClose: () => void }> = ({ fpkId, onClose }) => {
   const { closing, close } = useAnimatedClose(onClose);
-  const { state, lookups, access, me } = useStore();
+  const { state, lookups, access, me, myTasks } = useStore();
   const f = lookups.fpk.get(fpkId);
 
   useEffect(() => {
@@ -70,225 +177,160 @@ export const FpkSidePanel: React.FC<{ fpkId: string; onClose: () => void }> = ({
   const area = site?.areaId ? lookups.area.get(site.areaId) : undefined;
   const isOwner = !!client && (client.accountOwnerId === me.id || client.coOwnerIds.includes(me.id));
   const totalPeople = v.lines.reduce((n, l) => n + l.qty, 0);
+  const shiftCount = new Set(v.lines.map(l => l.shift)).size;
+  const days = v.periodStart && v.periodEnd ? diffDays(v.periodStart, v.periodEnd) + 1 : 0;
+
+  // Chip status sama dengan daftar FPK
+  const minMargin = settingNum(state.settings, 'margin.minimum_pct', 10);
+  const mine = new Set(myTasks.filter(x => x.task.refType === 'fpk').map(x => x.task.refId));
+  const st = getFpkStatusDisplay(f, state, lookups, me, mine, minMargin);
+
+  // Data pendukung
+  const relatedSpks = state.spks.filter(x => x.fpkId === f.id);
+  const pendingSpk = relatedSpks.find(x => x.status === 'diinput' || x.status === 'perlu_revisi');
+  const cov = fpkCoverage(f, state.spks);
+  const openTasks = state.tasks.filter(t => t.refId === f.id && t.status === 'terbuka').sort((a, b) => a.dueAt.localeCompare(b.dueAt));
+  const due = openTasks[0]?.dueAt;
+  const dueText = due ? `batas ${fmtDate(due)}` : '';
+  const userName = (id?: string) => (id ? lookups.user.get(id)?.name : undefined) ?? '–';
+  const canInputSpk = access.can('spk.input') && isOwner && !pendingSpk;
+  const runningDays = f.startedAt ? diffDays(f.startedAt, TODAY) + 1 : 0;
+
+  // ① Langkah berikutnya (berubah sesuai status)
+  const lastReturn = [...f.reviews].reverse().find(r => r.result === 'kembalikan');
+  const next: { tone: keyof typeof NEXT_TONE; icon: React.ReactNode; title: React.ReactNode; body?: React.ReactNode; action?: React.ReactNode } | null = (() => {
+    switch (f.status) {
+      case 'draf':
+        return { tone: 'slate', icon: <Pencil className="w-4 h-4" />, title: 'Draf belum dikirim ke cek divisi', action: isOwner ? <Btn size="sm" variant="secondary" onClick={() => navigate(`/fpk/${f.id}/ubah`)}>Lanjutkan draf</Btn> : undefined };
+      case 'dikembalikan':
+        return {
+          tone: 'amber', icon: <Undo2 className="w-4 h-4" />,
+          title: <>Dikembalikan oleh {f.returned?.fromDivision ?? 'divisi'}{lastReturn ? ` (${userName(lastReturn.actorId)}, ${fmtDate(lastReturn.at)})` : ''}</>,
+          body: f.returned?.reason ? <>“{f.returned.reason}”</> : undefined,
+          action: isOwner ? <Btn size="sm" onClick={() => navigate(`/fpk/${f.id}/ubah`)}>Perbaiki → versi {v.no + 1}</Btn> : undefined,
+        };
+      // Status menunggu cukup ditunjukkan stepper. Setelah disetujui, pekerjaan berlanjut di Project.
+      case 'ditolak':
+        return { tone: 'red', icon: <AlertTriangle className="w-4 h-4" />, title: 'Ditolak BOD', body: f.bodDecision?.note };
+      case 'batal':
+        return { tone: 'red', icon: <AlertTriangle className="w-4 h-4" />, title: 'Dibatalkan', body: f.cancelled?.reason };
+      default:
+        return null;
+    }
+  })();
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true">
-      {/* Backdrop without blur */}
-      <div
-        className="drawer-backdrop fixed inset-0 bg-slate-900/20"
-        data-closing={closing}
-        onClick={close}
-      />
+    <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true" aria-label={`FPK ${f.number}`}>
+      <div className="drawer-backdrop fixed inset-0 bg-slate-900/20" data-closing={closing} onClick={close} />
 
       <div className="fixed inset-y-0 right-0 flex max-w-full">
-        {/* Panel 40% (Mobile/Tablet fallback to full/max-w-lg) */}
         <div className="drawer-panel w-screen sm:w-[520px] lg:w-[40vw] xl:w-[40vw] bg-white shadow-2xl border-l border-slate-200 flex flex-col z-10" data-closing={closing}>
-          
-          {/* Header Panel */}
-          <div className="px-5 py-4 border-b border-slate-200 flex items-center justify-between gap-3 bg-white sticky top-0 z-10">
+
+          {/* Header: ✕ kiri, buka halaman penuh kanan; identitas = klien & site */}
+          <div className="px-5 py-4 border-b border-slate-200 bg-white sticky top-0 z-10 space-y-2">
+            <PanelTopBar onClose={close} fullHref={`/fpk/${f.id}`} />
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base font-bold text-slate-900 tracking-tight">{f.number}</h2>
-                <Badge tone={FPK_STATUS[f.status].tone}>{FPK_STATUS[f.status].label}</Badge>
-                {f.versions.length > 1 && (
-                  <span className="text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-medium">
-                    v{v.no}
-                  </span>
-                )}
+                <h2 className="text-base font-semibold text-slate-900 font-mono">{f.number}</h2>
+                <StatusChip tone={st.tone} label={st.label} hint={st.hint} />
               </div>
-              <p className="text-xs text-slate-500 mt-0.5">
-                {FPK_TYPE[f.type]} · dibuat {lookups.user.get(f.createdBy)?.name ?? 'User'}, {fmtDate(f.createdAt)}
+              <p className="text-sm text-slate-800 mt-1">
+                {client?.name ?? '– Belum ada klien –'}
+                <span className="text-slate-300 mx-1.5">·</span>
+                {site?.name ?? '– Belum ada site –'}
+                {area && <span className="text-slate-500"><span className="text-slate-300 mx-1.5">·</span>{area.name}</span>}
               </p>
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={close}
-                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                aria-label="Tutup panel"
-              >
-                <X className="w-5 h-5" />
-              </button>
+              <p className="text-[13px] text-slate-500 mt-0.5">
+                {FPK_TYPE[f.type]} · v{v.no} · dibuat {userName(f.createdBy)}, {fmtDate(f.createdAt)}
+              </p>
             </div>
           </div>
 
-          {/* Body Scrollable */}
+          {/* Body */}
           <div className="flex-1 overflow-y-auto p-5 space-y-5">
-            {/* Alert if returned or not feasible */}
-            {f.returned && f.status === 'dikembalikan' && (
-              <div className="flex items-start gap-2.5 text-xs bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3">
-                <Undo2 className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-semibold">Dikembalikan oleh {f.returned.fromDivision}:</span>{' '}
-                  {f.returned.reason}
+            {/* Alur: 1 langkah sebelumnya, saat ini, 2 berikutnya */}
+            {!['ditolak', 'batal'].includes(f.status) && (() => { const sp = fpkStepProps(f); return <Stepper {...stepWindow(sp.steps, sp.current)} warn={sp.warn} compact />; })()}
+
+            {/* ① Langkah berikutnya */}
+            {next && (
+              <div className={cx('rounded-xl border px-4 py-3', NEXT_TONE[next.tone])}>
+                <div className="flex items-start gap-2.5">
+                  <span className="mt-0.5 shrink-0 opacity-80">{next.icon}</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm font-medium">{next.title}</div>
+                    {next.body && <div className="text-[13px] mt-0.5 opacity-90">{next.body}</div>}
+                  </div>
+                  {next.action && <div className="shrink-0">{next.action}</div>}
                 </div>
               </div>
             )}
-            {f.notFeasible && (
-              <div className="flex items-start gap-2.5 text-xs bg-rose-50 border border-rose-200 text-rose-800 rounded-xl p-3">
-                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                <div>
-                  <span className="font-semibold">Tidak layak ({f.notFeasible.division}):</span>{' '}
-                  {f.notFeasible.reason}
-                </div>
-              </div>
-            )}
+            {APPROVED.includes(f.status) && <ProjectLinkCard siteId={v.siteId} />}
 
-            {/* Section 1: Klien & Site Card */}
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Klien &amp; Lokasi
-              </div>
-              <div className="space-y-1.5">
-                <div className="font-bold text-slate-900 text-sm">
-                  {client?.name ?? '– Belum dipilih –'}
-                </div>
-                <div className="text-xs text-slate-600 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span>{site?.name ?? '– Belum ada site –'}</span>
-                  {area && <span className="text-slate-400">· Area {area.name}</span>}
-                </div>
-                {client?.accountOwnerId && (
-                  <div className="text-xs text-slate-500 pt-0.5">
-                    Account owner: {lookups.user.get(client.accountOwnerId)?.name ?? '–'}
-                  </div>
-                )}
-              </div>
+            {/* ② Ringkasan */}
+            <div className="grid grid-cols-2 gap-2">
+              <SummaryCard icon={Wallet} label="Nilai / bulan" value={<Money value={v.monthlyValue} clientId={v.clientId} />} valueClass="text-base" sub="sebelum PPN" />
+              <SummaryCard icon={Users} label="Personel" value={`${totalPeople} orang`} valueClass="text-base" sub={`${shiftCount} shift`} />
+              <SummaryCard icon={CalendarDays} label="Periode kontrak" value={v.periodStart && v.periodEnd ? `${fmtDate(v.periodStart)} – ${fmtDate(v.periodEnd)}` : '–'} valueClass="text-base" sub={days > 0 ? `${days} hari` : undefined} />
+              <SummaryCard icon={CalendarCheck} label={f.startedAt ? 'Mulai jaga' : 'Rencana mulai'} value={fmtDate(f.startedAt ?? v.plannedStart)} valueClass="text-base" sub={f.startedAt ? `sudah berjalan ${runningDays} hari` : undefined} />
             </div>
 
-            {/* Section 2: Nilai & Jadwal Grid */}
-            <div className="border border-slate-200 rounded-xl p-4 space-y-3">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                Nilai &amp; Jadwal Kontrak
-              </div>
-              <div className="grid grid-cols-2 gap-4 text-xs">
-                <div>
-                  <span className="text-slate-500 block mb-0.5">Nilai / Bulan</span>
-                  <div className="font-semibold text-slate-900 text-sm">
-                    <Money value={v.monthlyValue} clientId={v.clientId} />
-                  </div>
-                  <span className="text-[11px] text-slate-400">sebelum PPN</span>
-                </div>
-                <div>
-                  <span className="text-slate-500 block mb-0.5">Mulai Jaga</span>
-                  <div className="font-semibold text-slate-800 text-sm">
-                    {fmtDate(f.startedAt ?? v.plannedStart)}
-                  </div>
-                  {f.startedAt && <span className="text-[11px] text-emerald-600 font-medium">sudah mulai</span>}
-                </div>
-                <div>
-                  <span className="text-slate-500 block mb-0.5">Periode Kontrak</span>
-                  <div className="font-medium text-slate-800">
-                    {v.periodStart && v.periodEnd ? `${fmtDate(v.periodStart)} – ${fmtDate(v.periodEnd)}` : '–'}
-                  </div>
-                </div>
-                <div>
-                  <span className="text-slate-500 block mb-0.5">Total Durasi</span>
-                  <div className="font-medium text-slate-800">
-                    {v.periodStart && v.periodEnd && diffDays(v.periodStart, v.periodEnd) > 0
-                      ? `${Math.round(diffDays(v.periodStart, v.periodEnd) / 30.417)} bulan (${diffDays(v.periodStart, v.periodEnd)} hari)`
-                      : '–'}
-                  </div>
-                </div>
-              </div>
-            </div>
+            {/* ③ Cek divisi */}
+            <PanelSection title="Cek divisi" right={f.versions.length > 1 ? `versi ${v.no}` : undefined}>
+              <DivisionChecks f={f} />
+            </PanelSection>
 
-            {/* Section 3: Cek Divisi */}
-            <div className="border border-slate-200 rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  Verifikasi 4 Divisi
-                </span>
-                <CheckChips f={f} />
-              </div>
-              <CheckChips f={f} labeled={true} />
-            </div>
-
-            {/* Section 4: Formasi Personel */}
-            <div className="border border-slate-200 rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  Formasi Personel
-                </span>
-                <span className="text-xs font-semibold text-slate-700">
-                  Total {totalPeople} orang
-                </span>
-              </div>
-              <div className="divide-y divide-slate-100 text-xs">
+            {/* ④ Formasi personel */}
+            <PanelSection title="Formasi personel" right={`${totalPeople} orang`}>
+              <ul className="divide-y divide-slate-100">
                 {v.lines.map((l, idx) => (
-                  <div key={idx} className="py-2.5 flex items-center justify-between gap-2">
-                    <div>
-                      <div className="font-semibold text-slate-800">
-                        {lookups.position.get(l.positionId)?.name ?? '– Jabatan –'}
-                      </div>
-                      {l.notes && <div className="text-[11px] text-slate-500 mt-0.5">{l.notes}</div>}
+                  <li key={idx} className="flex items-start justify-between gap-3 py-2 text-sm">
+                    <div className="min-w-0">
+                      <div className="text-slate-800">{lookups.position.get(l.positionId)?.name ?? '– Jabatan –'}</div>
+                      {l.notes && <div className="text-[13px] text-slate-500 mt-0.5">{l.notes}</div>}
                     </div>
-                    <div className="text-right shrink-0">
-                      <span className="font-bold text-slate-900">{l.qty}</span>
-                      <span className="text-slate-500 ml-1">orang</span>
-                      <span className="inline-block ml-2 px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-medium text-[11px]">
-                        {l.shift}
-                      </span>
-                    </div>
-                  </div>
+                    <span className="shrink-0 text-slate-700 tabular-nums">{l.qty} orang <span className="text-slate-400">·</span> {l.shift}</span>
+                  </li>
                 ))}
-              </div>
-            </div>
+              </ul>
+            </PanelSection>
 
-            {/* Section 5: Lampiran */}
-            {v.attachments && v.attachments.length > 0 && (
-              <div className="border border-slate-200 rounded-xl p-4 space-y-3">
-                <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-                  Lampiran ({v.attachments.length})
-                </div>
+            {/* ⑤ SPK terkait (hanya bila ada) */}
+            {relatedSpks.length > 0 && (
+              <PanelSection title="SPK terkait" right={`${cov.done} dari ${cov.total} personel tercakup`}>
+                <ul className="divide-y divide-slate-100">
+                  {relatedSpks.map(x => (
+                    <li key={x.id}>
+                      <button type="button" onClick={() => navigate(`/spk/${x.id}`)} className="w-full flex items-center justify-between gap-3 py-2 text-sm text-left hover:bg-slate-50 rounded">
+                        <span className="font-mono text-slate-800">{x.number}</span>
+                        <span className="flex items-center gap-2">
+                          <span className="text-[13px] text-slate-500">{x.lines.reduce((n, l) => n + l.qty, 0)} orang</span>
+                          <Badge tone={SPK_STATUS[x.status].tone}>{SPK_STATUS[x.status].label}</Badge>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </PanelSection>
+            )}
+
+            {/* ⑥ Lampiran */}
+            {v.attachments.length > 0 && (
+              <PanelSection title="Lampiran" right={`${v.attachments.length} file`}>
                 <div className="space-y-1.5">
-                  {v.attachments.map((att, idx) => (
-                    <div key={idx} className="flex items-center justify-between text-xs p-2 rounded-lg bg-slate-50 border border-slate-200">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Paperclip className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                        <span className="font-medium text-slate-700 truncate">{att.fileName}</span>
-                      </div>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-white border border-slate-200 text-slate-600 shrink-0">
-                        {att.kind}
-                      </span>
+                  {v.attachments.map(att => (
+                    <div key={att.id} className="flex items-center justify-between gap-2">
+                      <AttachmentChip a={att} clientId={v.clientId} />
+                      <span className="text-[13px] text-slate-500 shrink-0">{att.kind}</span>
                     </div>
                   ))}
                 </div>
-              </div>
+              </PanelSection>
             )}
 
-            {/* Section 6: Log aktivitas FPK (paling bawah) */}
-            <div className="border border-slate-200 rounded-xl p-4 space-y-3">
-              <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Log aktivitas</div>
+            {/* ⑦ Log aktivitas (paling bawah) */}
+            <PanelSection title="Log aktivitas">
               <ActivityLog items={fpkActivity(f, state.spks, state.audit, access.money(v.clientId))} />
-            </div>
-          </div>
-
-          {/* Footer Panel */}
-          <div className="p-4 border-t border-slate-200 bg-slate-50/70 flex items-center justify-between gap-2">
-            <div>
-              {f.status === 'draf' && isOwner && (
-                <Btn
-                  size="sm"
-                  variant="secondary"
-                  icon={<Pencil className="w-3.5 h-3.5" />}
-                  onClick={() => navigate(`/fpk/${f.id}/ubah`)}
-                >
-                  Ubah draf
-                </Btn>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              <Btn
-                size="sm"
-                variant="primary"
-                icon={<ExternalLink className="w-3.5 h-3.5" />}
-                onClick={() => navigate(`/fpk/${f.id}`)}
-              >
-                Buka Halaman Penuh
-              </Btn>
-            </div>
+            </PanelSection>
           </div>
         </div>
       </div>
@@ -451,27 +493,19 @@ export const getFpkStatusDisplay = (
       label = 'Disetujui';
       break;
 
+    // Setelah disetujui, FPK sebagai dokumen sudah selesai. Kondisi pekerjaan (jalan tanpa SPK,
+    // SPK sebagian, dst.) ditampilkan di Project; di sini cukup keterangan di tooltip.
     case 'berjalan':
     case 'tertutup_sebagian': {
-      label = 'Berjalan';
-      const spkPending = state.spks.some(x => x.fpkId === f.id && x.status === 'diinput');
-      const pendingNote = spkPending ? ' · SPK menunggu verifikasi Finance' : '';
-      if (cov.done === 0) {
-        line2 = `Tanpa SPK · ${daysRunning} hari`;
-        hint = {
-          kind: isSpkOverdue ? 'danger' : 'warn',
-          text: `Berjalan tanpa SPK · ${daysRunning} hari${isSpkOverdue ? ' · lewat batas kejar SPK' : ''}${pendingNote}`,
-        };
-      } else {
-        line2 = `SPK ${cov.done}/${cov.total}`;
-        hint = { kind: 'warn', text: `SPK belum lengkap · ${cov.done} dari ${cov.total} personel${pendingNote}` };
-      }
+      label = 'Disetujui';
+      line2 = cov.done === 0 ? `Project: tanpa SPK · ${daysRunning} hari` : `Project: SPK ${cov.done}/${cov.total}`;
+      hint = { kind: 'info', text: cov.done === 0 ? `Project berjalan tanpa SPK · ${daysRunning} hari` : `Project berjalan · SPK menutup ${cov.done} dari ${cov.total} personel` };
       break;
     }
 
     case 'selesai':
-      // SPK sudah menutup seluruh kuota: dari sisi pengguna, proyek cukup "Berjalan"
-      label = 'Berjalan';
+      label = 'Disetujui';
+      hint = { kind: 'info', text: 'Project berjalan · seluruh personel tercakup SPK' };
       break;
 
     case 'ditolak': {
@@ -532,7 +566,7 @@ type SortCol = 'default' | 'nomor' | 'fpk' | 'site' | 'status' | 'start' | 'head
 
 export const FpkListPage: React.FC = () => {
   const { state, lookups, access, myTasks, me } = useStore();
-  const [tab, setTab] = useState<'aktif' | 'draft' | 'archived'>('aktif');
+  const [tab, setTab] = useState<'semua' | 'aktif' | 'draft' | 'approved' | 'archived'>('semua');
   const [q, setQ] = useState('');
   const [area, setArea] = useState('');
   const [selectedFpkId, setSelectedFpkId] = useState<string | null>(null);
@@ -547,11 +581,15 @@ export const FpkListPage: React.FC = () => {
     return access.area(s.areaId);
   });
   const draftCount = visible.filter(f => f.status === 'draf').length;
+  const activeCount = visible.filter(f => ACTIVE.includes(f.status)).length;
+  const approvedCount = visible.filter(f => APPROVED.includes(f.status)).length;
 
   const filteredFpks = visible
     .filter(f => {
       if (tab === 'draft') return f.status === 'draf';
+      if (tab === 'semua') return true;
       if (tab === 'archived') return ARCHIVED.includes(f.status);
+      if (tab === 'approved') return APPROVED.includes(f.status);
       return ACTIVE.includes(f.status);
     })
     .filter(f => !area || lookups.site.get(latest(f).siteId)?.areaId === area)
@@ -642,10 +680,12 @@ export const FpkListPage: React.FC = () => {
     </button>
   );
 
+  const { pageRows: pageRowsFpk, pager: pagerFpk } = usePaged(sortedRows);
   return (
     <div>
       <PageHeader
         title="FPK"
+        subtitle="Perintah kerja internal yang dicek divisi terkait dan disetujui BOD, supaya persiapan bisa jalan sebelum SPK terbit."
         actions={<>
           <Btn
             size="sm"
@@ -675,9 +715,11 @@ export const FpkListPage: React.FC = () => {
           {access.can('fpk.create') && <Btn size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => navigate('/fpk/baru')}>Buat FPK</Btn>}
         </>}
       />
-      <Tabs value={tab} onChange={k => setTab(k as 'aktif' | 'draft' | 'archived')} tabs={[
-        { key: 'aktif', label: 'Aktif' },
+      <Tabs value={tab} onChange={k => setTab(k as 'semua' | 'aktif' | 'draft' | 'approved' | 'archived')} tabs={[
+        { key: 'semua', label: `Semua (${visible.length})` },
+        { key: 'aktif', label: `Pengajuan (${activeCount})` },
         { key: 'draft', label: `Draf (${draftCount})` },
+        { key: 'approved', label: `Disetujui (${approvedCount})` },
         { key: 'archived', label: 'Arsip' },
       ]} />
       <div className="flex flex-col sm:flex-row gap-2 mb-3">
@@ -697,7 +739,7 @@ export const FpkListPage: React.FC = () => {
           renderSortHeader('Orang', 'headcount'),
           renderSortHeader('Nilai/bln', 'value'),
         ]}>
-          {sortedRows.map(({ f, statusDisplay }) => {
+          {pageRowsFpk.map(({ f, statusDisplay }) => {
             const v = latest(f);
             const isSelected = selectedFpkId === f.id;
             const clientName = lookups.client.get(v.clientId)?.name ?? '– Belum dipilih –';
@@ -710,11 +752,8 @@ export const FpkListPage: React.FC = () => {
 
             return (
               <Tr key={f.id} selected={isSelected} onClick={() => setSelectedFpkId(f.id)}>
-                {/* 1. No. FPK (garis kuning di kiri jika Giliran Anda) */}
-                <Td className={cx(
-                  'whitespace-nowrap transition-all border-l-[3px] pl-3',
-                  statusDisplay.isMyTurn ? 'border-amber-400' : 'border-transparent'
-                )}>
+                {/* 1. No. FPK */}
+                <Td className="whitespace-nowrap">
                   <span className="font-mono text-sm font-medium text-slate-900">{f.number}</span>
                   {versionLabel && <span className="ml-1.5 text-[13px] text-slate-500 font-medium">{versionLabel}</span>}
                   {typeLabel && <div className="text-[13px] text-amber-700 font-medium mt-0.5">{typeLabel}</div>}
@@ -725,10 +764,9 @@ export const FpkListPage: React.FC = () => {
                   <div className="font-medium text-slate-900 text-sm leading-snug">{clientName}</div>
                 </Td>
 
-                {/* 3. Site (area di bawahnya) */}
+                {/* 3. Site */}
                 <Td>
                   <div className="text-sm text-slate-800 leading-snug">{siteName}</div>
-                  {areaName && <div className="text-[13px] text-slate-500 leading-snug mt-0.5">{areaName}</div>}
                 </Td>
 
                 {/* 4. Status: chip + ikon tooltip, tanpa baris kedua */}
@@ -761,6 +799,7 @@ export const FpkListPage: React.FC = () => {
           })}
         </Table>
         {sortedRows.length === 0 && <TableEmpty>Tidak ada FPK.</TableEmpty>}
+        {pagerFpk}
       </Card>
 
       {/* Side Panel 40% Quick Preview */}

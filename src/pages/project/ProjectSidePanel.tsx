@@ -1,25 +1,20 @@
 // Quick view Project: side modal dari kanan dengan isi ringkas halaman detail Project.
 import React, { useEffect, useState } from 'react';
-import { X, ExternalLink } from 'lucide-react';
+import { X, ExternalLink, DollarSign, Calendar, FileText, FileCheck2, ArrowRight } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { ActivityLog, AttachmentChip, Badge, Btn, Money, StatusChip, Tabs, toast, useAnimatedClose } from '../../ui/kit';
+import { ActivityLog, AttachmentChip, Badge, Btn, Money, StatusChip, Tabs, toast, useAnimatedClose, PanelTopBar, Stepper, stepWindow } from '../../ui/kit';
 import { navigate } from '../../router';
 import { PERSONNEL_STATUS, SPK_STATUS } from '../../domain/labels';
 import type { Attachment } from '../../domain/types';
 
 type TabKey = 'overview' | 'personel' | 'dokumen' | 'lampiran' | 'log';
 import { currentPlacement, latest, spkHeadcount, fpkHeadcount } from '../../domain/selectors';
-import { diffDays, fmtDate } from '../../domain/time';
+import { diffDays, fmtDate, TODAY } from '../../domain/time';
+import { SummaryCard, InfoCard, InfoRow, CopyBtn, ProjectBanner, ProjectChip, ProjectActionCell } from './projectUi';
+import { projectStatus, type ProjectStatus } from '../../domain/project';
 import { settingNum } from '../../domain/settings';
 import { projectActivity } from '../../domain/activity';
 import { getFpkStatusDisplay } from '../fpk/FpkList';
-
-const Row: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-  <div className="flex items-start text-sm">
-    <span className="w-[112px] shrink-0 text-[13px] text-slate-500 pt-0.5">{label}</span>
-    <div className="min-w-0 flex-1 text-slate-800">{children}</div>
-  </div>
-);
 
 /** Baris dokumen yang bisa diklik (bukan <button>, karena chip status di dalamnya juga tombol). */
 const DocRow: React.FC<{ onOpen: () => void; children: React.ReactNode }> = ({ onOpen, children }) => (
@@ -35,9 +30,9 @@ const DocRow: React.FC<{ onOpen: () => void; children: React.ReactNode }> = ({ o
 );
 
 const Section: React.FC<{ title: string; right?: React.ReactNode; children: React.ReactNode }> = ({ title, right, children }) => (
-  <div className="border border-slate-200 rounded-xl p-4 space-y-3">
+  <div className="border border-slate-200 rounded-xl p-5 space-y-3">
     <div className="flex items-center justify-between">
-      <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{title}</div>
+      <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
       {right}
     </div>
     {children}
@@ -70,10 +65,14 @@ export const ProjectSidePanel: React.FC<{ siteId: string; onClose: () => void }>
   const mainFpkVer = mainFpk ? latest(mainFpk) : undefined;
 
   // Nilai & periode: dari SPK aktif, kalau belum ada pakai FPK
-  const monthlyValue = activeSpk ? activeSpk.monthlyValue : (mainFpkVer?.monthlyValue ?? 0);
-  const periodStart = activeSpk ? activeSpk.periodStart : (mainFpkVer?.periodStart ?? '');
-  const periodEnd = activeSpk ? activeSpk.periodEnd : (mainFpkVer?.periodEnd ?? '');
+  const refSpk = activeSpk?.status === 'aktif' ? activeSpk : undefined;
+  const monthlyValue = refSpk ? refSpk.monthlyValue : (mainFpkVer?.monthlyValue ?? 0);
+  const periodStart = refSpk ? refSpk.periodStart : (mainFpkVer?.periodStart ?? '');
+  const periodEnd = refSpk ? refSpk.periodEnd : (mainFpkVer?.periodEnd ?? '');
   const days = periodStart && periodEnd ? diffDays(periodStart, periodEnd) + 1 : 0;
+  const durationMonths = days > 0 ? Math.round(days / 30.4) : 0;
+  const daysLeft = periodEnd ? diffDays(TODAY, periodEnd) : 0;
+  const endsIn = daysLeft < 0 ? 'sudah berakhir' : daysLeft <= 60 ? `berakhir ${daysLeft} hari lagi` : `berakhir ${Math.round(daysLeft / 30.4)} bulan lagi`;
 
   // Status FPK sama dengan chip di daftar
   const minMargin = settingNum(state.settings, 'margin.minimum_pct', 10);
@@ -108,6 +107,7 @@ export const ProjectSidePanel: React.FC<{ siteId: string; onClose: () => void }>
   };
 
   const openFull = (q = '') => navigate(`/project/${site.id}${q}`);
+  const ps = projectStatus(site, state);
 
   return (
     <div className="fixed inset-0 z-50 overflow-hidden" role="dialog" aria-modal="true" aria-label={`Ringkasan ${site.name}`}>
@@ -116,42 +116,50 @@ export const ProjectSidePanel: React.FC<{ siteId: string; onClose: () => void }>
       <div className="fixed inset-y-0 right-0 flex max-w-full">
         <div className="drawer-panel w-screen sm:w-[520px] lg:w-[40vw] bg-white shadow-2xl border-l border-slate-200 flex flex-col z-10" data-closing={closing}>
           {/* Header */}
-          <div className="px-5 py-4 border-b border-slate-200 flex items-start justify-between gap-3">
+          <div className="px-5 py-4 border-b border-slate-200 space-y-2">
+            <PanelTopBar onClose={close} fullHref={`/project/${site.id}`} />
             <div className="min-w-0">
               <h2 className="text-base font-bold text-slate-900 tracking-tight">{site.name}</h2>
               <div className="flex items-center gap-1.5 flex-wrap mt-1 text-xs text-slate-500">
-                <span className="font-mono font-bold text-slate-950 bg-amber-400 px-1.5 py-0.5 rounded text-[11px]">PRJ-{site.code}</span>
-                <span>{client?.name}</span>
+                <span className="font-mono text-[13px] text-slate-500">PRJ-{site.code}</span>
+                <span className="text-slate-300">·</span>
+                <span className="text-slate-700">{client?.name}</span>
                 <span className="text-slate-300">·</span>
                 <span>{area?.name}</span>
+                <span className="ml-1"><ProjectChip ps={ps} /></span>
               </div>
             </div>
-            <button type="button" onClick={close} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg" aria-label="Tutup panel">
-              <X className="w-5 h-5" />
-            </button>
           </div>
 
           {/* Body */}
           <div className="flex-1 overflow-y-auto p-5 space-y-4">
-            {/* Ringkasan: sama dengan 4 kartu di halaman detail */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="border border-slate-200 rounded-xl p-3">
-                <div className="text-xs text-slate-500">Nilai / bulan</div>
-                <div className="text-sm font-bold text-slate-900 mt-1">{monthlyValue ? <Money value={monthlyValue} clientId={site.clientId} /> : '–'}</div>
-              </div>
-              <div className="border border-slate-200 rounded-xl p-3">
-                <div className="text-xs text-slate-500">Periode</div>
-                <div className="text-sm font-semibold text-slate-900 mt-1">{periodStart ? `${fmtDate(periodStart)} – ${fmtDate(periodEnd)}` : '–'}</div>
-                {days > 0 && <div className="text-[11px] text-slate-400">{days} hari</div>}
-              </div>
-              <div className="border border-slate-200 rounded-xl p-3">
-                <div className="text-xs text-slate-500 mb-1.5">Status FPK</div>
-                {fpkStatus ? <StatusChip tone={fpkStatus.tone} label={fpkStatus.label} hint={fpkStatus.hint} /> : <Badge tone="slate">Tanpa FPK</Badge>}
-              </div>
-              <div className="border border-slate-200 rounded-xl p-3">
-                <div className="text-xs text-slate-500 mb-1.5">Status SPK</div>
-                {statusSpk ? <Badge tone={SPK_STATUS[statusSpk.status].tone}>{SPK_STATUS[statusSpk.status].label}</Badge> : <Badge tone="slate">Belum ada SPK</Badge>}
-              </div>
+            {/* Tahap project: 1 sebelumnya, saat ini, 2 berikutnya */}
+            {(() => { const w = stepWindow(ps.steps, ps.stage); return <Stepper steps={w.steps} current={w.current} warn={ps.warn} compact />; })()}
+            <ProjectBanner ps={ps} />
+            {!ps.banner && <PanelAction ps={ps} />}
+
+            {/* Ringkasan: komponen kartu yang sama dengan halaman detail */}
+            <div className="grid grid-cols-2 gap-2">
+              <SummaryCard icon={DollarSign} label="Nilai kontrak / bulan"
+                value={monthlyValue ? <Money value={monthlyValue} clientId={site.clientId} /> : '–'}
+                valueClass="text-base"
+                sub={durationMonths > 0 ? <>Est. {durationMonths} bln: <Money value={monthlyValue * durationMonths} clientId={site.clientId} /></> : 'Sebelum PPN'}
+              />
+              <SummaryCard icon={Calendar} label="Periode"
+                value={periodStart ? `${fmtDate(periodStart)} – ${fmtDate(periodEnd)}` : '–'}
+                valueClass="text-base"
+                sub={days > 0 ? `${days} hari · ${endsIn}` : undefined}
+              />
+              <SummaryCard icon={FileText} label="Status FPK"
+                onClick={mainFpk ? () => openFull(`?doc=${mainFpk.number.replace(/\//g, '-')}`) : undefined}
+                value={fpkStatus ? <StatusChip tone={fpkStatus.tone} label={fpkStatus.label} hint={fpkStatus.hint} /> : <Badge tone="slate">Belum ada FPK</Badge>}
+                sub={mainFpk ? <span className="font-mono text-slate-700">{mainFpk.number}</span> : undefined}
+              />
+              <SummaryCard icon={FileCheck2} label="Status SPK"
+                onClick={statusSpk ? () => openFull(`?doc=${statusSpk.number.replace(/\//g, '-')}`) : undefined}
+                value={statusSpk ? <Badge tone={SPK_STATUS[statusSpk.status].tone}>{SPK_STATUS[statusSpk.status].label}</Badge> : <Badge tone="slate">Belum ada SPK</Badge>}
+                sub={statusSpk ? <span className="font-mono text-slate-700">{statusSpk.number}</span> : undefined}
+              />
             </div>
 
             {/* Tab bar tetap menempel di atas saat isi panel di-scroll */}
@@ -171,46 +179,43 @@ export const ProjectSidePanel: React.FC<{ siteId: string; onClose: () => void }>
 
             {tab === 'overview' && (
               <div className="space-y-4">
-              {/* Lokasi & tim JISS */}
-              <Section title="Lokasi & tim JISS">
-                <div className="space-y-2.5">
-                  <Row label="Alamat">
+              {/* Sama dengan kartu Overview di halaman detail */}
+              <InfoCard title="Lokasi & tim JISS">
+                <InfoRow label="Alamat">
+                  <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(site.address)}`} target="_blank" rel="noopener noreferrer" className="group text-slate-800 hover:text-slate-950 hover:underline underline-offset-2" title="Buka di peta">
                     {site.address}
-                    <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(site.address)}`} target="_blank" rel="noopener noreferrer" className="ml-1.5 text-xs font-medium text-indigo-600 hover:underline whitespace-nowrap">Buka di peta ↗</a>
-                  </Row>
-                  <Row label="Kode site"><span className="font-mono text-xs">{site.code}</span></Row>
-                  <hr className="border-slate-100" />
-                  <Row label="Bertugas">
-                    {personnel.length} personel
-                    {short > 0 && <span className="text-rose-600 font-medium"> · kurang {short}</span>}
-                  </Row>
-                  <Row label="Danru">
-                    {danrus.length ? danrus.map(d => <div key={d.id}>{d.name}</div>) : <span className="text-slate-400">Belum ada</span>}
-                  </Row>
-                  <Row label="PIC area">{picArea?.name ?? '–'}</Row>
-                  <Row label="Account owner">{owner?.name ?? '–'}</Row>
-                </div>
-              </Section>
+                    <span className="ml-2 whitespace-nowrap text-[13px] font-medium text-slate-500 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-visible:opacity-100 transition-opacity">Buka peta ↗</span>
+                  </a>
+                </InfoRow>
+                <hr className="border-slate-100" />
+                <InfoRow label="Bertugas">
+                  {personnel.length} personel
+                  {short > 0 && <span className="text-rose-600 font-medium"> · kurang {short}</span>}
+                  <button type="button" onClick={() => setTab('personel')} aria-label="Lihat semua personel" title="Lihat semua personel" className="ml-1.5 inline-flex align-middle p-0.5 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-100"><ArrowRight className="w-4 h-4" /></button>
+                </InfoRow>
+                <InfoRow label="Danru">
+                  {danrus.length ? danrus.map(d => <div key={d.id}>{d.name}</div>) : <span className="text-slate-400">Belum ada</span>}
+                </InfoRow>
+                <InfoRow label="PIC area">{picArea?.name ?? '–'}</InfoRow>
+                <InfoRow label="Account owner">{owner?.name ?? '–'}</InfoRow>
+              </InfoCard>
 
-              {/* Klien */}
-              <Section title="Klien">
-                <div className="space-y-2.5">
-                  <Row label="PIC klien">{client?.picContact?.replace(/\s*\(([^)]+)\)/, ' · $1') || <span className="text-slate-400">Belum ada kontak PIC</span>}</Row>
-                  <Row label="Telepon">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-[13px]">{client?.picPhone || '–'}</span>
-                      {client?.picPhone && <button type="button" onClick={() => copy(client.picPhone!, 'Nomor telepon')} className="text-xs font-medium text-indigo-600 hover:underline">Salin</button>}
-                    </div>
-                  </Row>
-                  <Row label="Email">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-[13px] truncate">{client?.picEmail || '–'}</span>
-                      {client?.picEmail && <button type="button" onClick={() => copy(client.picEmail!, 'Email')} className="text-xs font-medium text-indigo-600 hover:underline">Salin</button>}
-                    </div>
-                  </Row>
-                  <Row label="Termin bayar">{client?.termDays ? `${client.termDays} hari` : '30 hari'}</Row>
-                </div>
-              </Section>
+              <InfoCard title="Klien">
+                <InfoRow label="PIC klien">{client?.picContact?.replace(/\s*\(([^)]+)\)/, ' · $1') || <span className="text-slate-400">Belum ada kontak PIC</span>}</InfoRow>
+                <InfoRow label="Telepon">
+                  <span className="inline-flex items-center gap-1.5">
+                    {client?.picPhone || '–'}
+                    {client?.picPhone && <CopyBtn label="Salin nomor telepon" onClick={() => copy(client.picPhone!, 'Nomor telepon')} />}
+                  </span>
+                </InfoRow>
+                <InfoRow label="Email">
+                  <span className="inline-flex items-center gap-1.5 min-w-0 max-w-full">
+                    <span className="truncate">{client?.picEmail || '–'}</span>
+                    {client?.picEmail && <CopyBtn label="Salin email" onClick={() => copy(client.picEmail!, 'Email')} />}
+                  </span>
+                </InfoRow>
+                <InfoRow label="Termin bayar">{client?.termDays ? `${client.termDays} hari` : '30 hari'}</InfoRow>
+              </InfoCard>
 
               </div>
             )}
@@ -305,14 +310,19 @@ export const ProjectSidePanel: React.FC<{ siteId: string; onClose: () => void }>
             )}
           </div>
 
-          {/* Footer */}
-          <div className="p-4 border-t border-slate-200 bg-slate-50/70 flex justify-end">
-            <Btn size="sm" icon={<ExternalLink className="w-3.5 h-3.5" />} onClick={() => openFull()}>
-              Buka Halaman Penuh
-            </Btn>
-          </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+/** Tindakan berikutnya tanpa banner (tidak ada masalah): satu baris ringkas. */
+const PanelAction: React.FC<{ ps: ProjectStatus }> = ({ ps }) => {
+  if (!ps.action) return null;
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-2.5">
+      <span className="text-[13px] text-slate-500">Berikutnya</span>
+      <ProjectActionCell ps={ps} />
     </div>
   );
 };

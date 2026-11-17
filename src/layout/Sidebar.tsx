@@ -1,17 +1,20 @@
 import React from 'react';
 import {
-  ListChecks, Gavel, Plus, FileText, FileCheck2, Timer, Mail, MapPinned, Building2, MapPin, Briefcase,
+  ListChecks, Gavel, Plus, FileText, FileCheck2, Mail, Timer, MapPinned, Building2, MapPin, Briefcase,
   Users, UserCog, Network, Settings, ShieldCheck, History, LayoutDashboard, X, Layers, FolderKanban,
 } from 'lucide-react';
 import { useStore } from '../store/store';
 import { Link, usePath, navigate } from '../router';
 import { cx } from '../ui/kit';
+import { waitingOn } from '../domain/tasks';
 import type { Perm } from '../domain/rbac';
 
 interface Item { to: string; label: string; icon: React.ElementType; perm: Perm; badge?: number; soon?: boolean }
 
 export const Sidebar: React.FC<{ open: boolean; onClose: () => void }> = ({ open, onClose }) => {
-  const { access, myTasks } = useStore();
+  const { access, myTasks, state } = useStore();
+  // Tugas yang menunggu pihak lain tidak dihitung di badge
+  const actionable = myTasks.filter(x => !waitingOn(x.task, state.spks)).length;
   const path = usePath();
   const decisions = myTasks.filter(x => x.task.assigneeRole === 'BOD' || x.reason === 'eskalasi-bod').length;
 
@@ -19,17 +22,23 @@ export const Sidebar: React.FC<{ open: boolean; onClose: () => void }> = ({ open
     {
       title: 'Ruang kerja',
       items: [
-        { to: '/tugas', label: 'Tugas Saya', icon: ListChecks, perm: 'tasks.view', badge: myTasks.length },
+        { to: '/tugas', label: 'Tugas Saya', icon: ListChecks, perm: 'tasks.view', badge: actionable },
         { to: '/keputusan', label: 'Menunggu keputusan saya', icon: Gavel, perm: 'decisions.view', badge: decisions },
       ],
     },
     {
       title: 'Kontrak',
       items: [
+        // Pekerjaan per site (termasuk jalan tanpa SPK dan masa perpanjangan)
         { to: '/project', label: 'Project', icon: FolderKanban, perm: 'fpk.view' },
+        { to: '/jalan-tanpa-spk', label: 'Jalan tanpa SPK', icon: Timer, perm: 'spk.view' },
+      ],
+    },
+    {
+      title: 'Dokumen',
+      items: [
         { to: '/fpk', label: 'FPK', icon: FileText, perm: 'fpk.view' },
         { to: '/spk', label: 'SPK', icon: FileCheck2, perm: 'spk.view' },
-        { to: '/jalan-tanpa-spk', label: 'Jalan tanpa SPK', icon: Timer, perm: 'spk.view' },
         { to: '/memo', label: 'Memo eksternal', icon: Mail, perm: 'memo.view' },
       ],
     },

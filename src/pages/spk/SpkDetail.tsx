@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { CheckCircle2, XCircle, ThumbsUp, Lock, AlertTriangle, FileEdit, Receipt } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { AttachmentChip, Badge, Btn, Card, DL, Input, Money, PageHeader, Table, Td, cx, toast, DocLink, StickyActionBar, Tr } from '../../ui/kit';
+import { Stepper, AttachmentChip, Badge, Btn, Card, DL, Input, Money, PageHeader, Table, Td, cx, toast, DocLink, StickyActionBar, Tr } from '../../ui/kit';
+import { spkStepProps } from './SpkList';
+import { ProjectLinkCard } from '../project/projectUi';
 import { ReasonModal } from '../../ui/ReasonModal';
 import { Link, navigate } from '../../router';
 import { NotFound } from '../Misc';
@@ -66,9 +68,12 @@ export const SpkDetailPage: React.FC<{ id: string }> = ({ id }) => {
         actions={<>
           {s.status === 'perlu_revisi' && isOwner && has(me, 'Marketing') && <Btn size="sm" icon={<FileEdit className="w-3.5 h-3.5" />} onClick={() => navigate(`/spk/${s.id}/revisi`)}>Input revisi SPK</Btn>}
           {s.status === 'perlu_revisi' && s.invoiceHeld && has(me, 'BOD') && <Btn size="sm" variant="secondary" onClick={() => setModal('tagih')}>Tagih sesuai SPK dulu</Btn>}
-          {s.status === 'aktif' && isOwner && has(me, 'Marketing') && !openMemo && memoWindow && <Btn size="sm" onClick={() => navigate(`/memo/baru?spk=${s.id}`)}>Buat memo (H-{daysLeft})</Btn>}
         </>}
       />
+
+      {/* Alur SPK: diinput → verifikasi Finance → aktif → berakhir */}
+      <Stepper {...spkStepProps(s)} />
+      <ProjectLinkCard siteId={s.siteId} />
 
       {s.status === 'perlu_revisi' && (
         <div className="flex items-start gap-2 text-sm bg-amber-50 border border-amber-200 text-amber-900 rounded-xl px-4 py-3">

@@ -2,21 +2,25 @@ import React, { useState, useEffect } from 'react';
 import {
   Building2, MapPin, User, Mail, Phone, FileText, FileCheck2, Shield,
   Clock, DollarSign, Paperclip, ChevronRight, CheckCircle2, AlertCircle,
-  ExternalLink, Calendar, Users, Layers, Plus
+  ExternalLink, Calendar, Users, Layers, Plus, Copy, ArrowRight
 } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { ActivityLog, AttachmentChip, Badge, Btn, Card, DL, Money, PageHeader, Table, Td, cx, toast, Tr, CellMain, CellSub, CellCode, TableEmpty } from '../../ui/kit';
+import { ActivityLog, AttachmentChip, Badge, Btn, Card, DL, Money, PageHeader, Table, Td, cx, toast, Tr, CellMain, CellSub, CellCode, TableEmpty, Tabs, StatusChip, Stepper } from '../../ui/kit';
 import { projectActivity } from '../../domain/activity';
 import { Link, navigate } from '../../router';
 import { NotFound } from '../Misc';
-import { FPK_STATUS, SPK_STATUS, PERSONNEL_STATUS } from '../../domain/labels';
+import { FPK_STATUS, SPK_STATUS, PERSONNEL_STATUS, MEMO_STATUS } from '../../domain/labels';
 import { currentPlacement, fpkCoverage, fpkHeadcount, latest, spkHeadcount } from '../../domain/selectors';
-import { diffDays, fmtDate, fmtDateTime } from '../../domain/time';
+import { diffDays, fmtDate, fmtDateTime, TODAY } from '../../domain/time';
+import { settingNum } from '../../domain/settings';
+import { getFpkStatusDisplay } from '../fpk/FpkList';
+import { LINK, SummaryCard, InfoCard, InfoRow, CopyBtn, ProjectBanner, ProjectChip } from './projectUi';
+import { projectStatus, canRunAction } from '../../domain/project';
 import type { Division, Fpk, Spk, Attachment } from '../../domain/types';
 import { ProjectDocDrawer, type ActiveDoc } from './ProjectDocDrawer';
 
 export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
-  const { state, lookups, access } = useStore();
+  const { state, lookups, access, me, myTasks } = useStore();
   const [activeTab, setActiveTab] = useState<'overview' | 'keamanan' | 'kontrak' | 'lampiran' | 'log'>('overview');
 
   // Project site
@@ -128,9 +132,11 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
   const activeFpkVer = activeFpk ? latest(activeFpk) : null;
 
   // Nilai Project
-  const monthlyValue = activeSpk ? activeSpk.monthlyValue : (activeFpkVer?.monthlyValue ?? 0);
-  const periodStart = activeSpk ? activeSpk.periodStart : (activeFpkVer?.periodStart ?? '');
-  const periodEnd = activeSpk ? activeSpk.periodEnd : (activeFpkVer?.periodEnd ?? '');
+  // Nilai & periode dari SPK yang sudah aktif; SPK yang masih dicek belum jadi acuan
+  const refSpk = activeSpk?.status === 'aktif' ? activeSpk : undefined;
+  const monthlyValue = refSpk ? refSpk.monthlyValue : (activeFpkVer?.monthlyValue ?? 0);
+  const periodStart = refSpk ? refSpk.periodStart : (activeFpkVer?.periodStart ?? '');
+  const periodEnd = refSpk ? refSpk.periodEnd : (activeFpkVer?.periodEnd ?? '');
   const durationDays = periodStart && periodEnd ? Math.max(0, diffDays(periodStart, periodEnd) + 1) : 0;
   const durationMonths = durationDays > 0 ? Math.round(durationDays / 30.4) : 0;
   const totalValue = monthlyValue * (durationMonths || 1);
@@ -215,182 +221,84 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
   const canInputSpk = Boolean(spkReadyFpk && access.can('spk.input'));
   const inputSpkHref = spkReadyFpk ? `/spk/input?project=${site.id}&fpk=${spkReadyFpk.id}` : '';
 
+  // Chip status FPK sama dengan daftar FPK
+  const minMargin = settingNum(state.settings, 'margin.minimum_pct', 10);
+  const myFpkTasks = new Set(myTasks.filter(x => x.task.refType === 'fpk').map(x => x.task.refId));
+  const fpkChip = activeFpk ? getFpkStatusDisplay(activeFpk, state, lookups, me, myFpkTasks, minMargin) : null;
+  const ps = projectStatus(site, state);
+  // "berakhir n bulan/hari lagi"
+  const daysLeft = periodEnd ? diffDays(TODAY, periodEnd) : 0;
+  const endsIn = daysLeft < 0 ? 'sudah berakhir' : daysLeft <= 60 ? `berakhir ${daysLeft} hari lagi` : `berakhir ${Math.round(daysLeft / 30.4)} bulan lagi`;
+
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Header: tanpa badge status (semua project aktif); area bisa diklik */}
       <PageHeader
         back="/project"
         title={site.name}
         subtitle={
-          <div className="flex flex-wrap items-center gap-2 mt-1 text-sm text-slate-500">
-            <span className="font-mono font-bold text-slate-950 bg-amber-400 px-2 py-0.5 rounded text-xs border border-amber-500/20 shadow-xs">
-              PRJ-{site.code}
-            </span>
-            <span>·</span>
-            <span className="font-medium text-slate-700">{client?.name}</span>
-            <span>·</span>
-            <span>{area?.name}</span>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 text-[13px] text-slate-500">
+            <span className="font-mono">PRJ-{site.code}</span>
+            <span aria-hidden="true">·</span>
+            <span className="text-slate-700">{client?.name}</span>
+            <span aria-hidden="true">·</span>
+            <Link to={`/area/${site.areaId}`} className="hover:text-slate-800 hover:underline underline-offset-2">{area?.name}</Link>
+            {ps && <span className="ml-1"><ProjectChip ps={ps} /></span>}
           </div>
         }
-        actions={
-          <div className="flex items-center gap-2">
-            <Badge tone={site.active ? 'green' : 'slate'} className="text-xs px-2.5 py-1">
-              Project {site.active ? 'Aktif' : 'Nonaktif'}
-            </Badge>
-          </div>
-        }
+        actions={ps && !ps.banner && canRunAction(ps.action, me, client) && ps.action?.to
+          ? <Btn size="sm" onClick={() => navigate(ps.action!.to!)}>{ps.action.label}</Btn> : undefined}
       />
 
-      {/* Top Cards: Nilai Project & Status Dokumen */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Card 1: Nilai Kontrak / Bulan */}
-        <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-xs">
-          <div className="flex items-start justify-between gap-2 text-xs font-semibold text-slate-500 mb-1">
-            <span>Nilai Kontrak / Bulan</span>
-            <DollarSign className="w-4 h-4 text-amber-500" />
-          </div>
-          <div className="text-base sm:text-xl font-bold text-slate-900 break-words">
-            {monthlyValue > 0 ? (
-              <Money value={monthlyValue} clientId={site.clientId} />
-            ) : (
-              <span className="text-slate-400 font-normal text-base">–</span>
-            )}
-          </div>
-          <div className="text-[11px] text-slate-500 mt-1">
-            {durationMonths > 0 ? `Est. total ${durationMonths} bln: ` : 'Sebelum PPN'}
-            {durationMonths > 0 && <Money value={totalValue} clientId={site.clientId} className="font-semibold text-slate-700" />}
-          </div>
-        </div>
+      {/* Tahap project (bukan status dokumen) */}
+      {ps && <Stepper steps={ps.steps} current={ps.stage} warn={ps.warn} />}
+      {ps && <ProjectBanner ps={ps} />}
 
-        {/* Card 2: Periode Kontrak */}
-        <div className="bg-white border border-slate-200 rounded-xl p-3 sm:p-4 shadow-xs">
-          <div className="flex items-start justify-between gap-2 text-xs font-semibold text-slate-500 mb-1">
-            <span>Periode Project</span>
-            <Calendar className="w-4 h-4 text-amber-500" />
-          </div>
-          <div className="text-sm font-bold text-slate-900 mt-1">
-            {periodStart ? `${fmtDate(periodStart)}` : '–'}
-          </div>
-          <div className="text-xs text-slate-500 mt-0.5">
-            s/d {periodEnd ? fmtDate(periodEnd) : '–'} {durationDays > 0 ? `(${durationDays} hari)` : ''}
-          </div>
-        </div>
-
-        {/* Card 3: Status Dokumen FPK */}
-        <div
-          onClick={() => {
-            if (activeFpk) {
-              if (activeDoc?.type === 'fpk' && activeDoc.id === activeFpk.id) requestCloseDoc();
-              else openDoc({ type: 'fpk', id: activeFpk.id });
-            }
-          }}
-          className={cx(
-            'bg-white border rounded-xl p-3 sm:p-4 shadow-xs transition-colors',
-            activeFpk ? 'cursor-pointer hover:border-indigo-300 hover:bg-slate-50/50' : '',
-            activeDoc?.type === 'fpk' && activeFpk && activeDoc.id === activeFpk.id ? 'border-indigo-600 ring-2 ring-indigo-100' : 'border-slate-200'
-          )}
-        >
-          <div className="flex items-start justify-between gap-2 text-xs font-semibold text-slate-500 mb-1">
-            <span>Status FPK</span>
-            <FileText className="w-4 h-4 text-amber-500" />
-          </div>
-          <div className="mt-1">
-            {activeFpk ? (
-              <div className="space-y-1">
-                <Badge tone={FPK_STATUS[activeFpk.status].tone}>
-                  {FPK_STATUS[activeFpk.status].label}
-                </Badge>
-                <div className="text-[11px] text-indigo-600 font-mono font-medium">
-                  {activeFpk.number}
-                </div>
-              </div>
-            ) : (
-              <Badge tone="slate">Belum ada FPK</Badge>
-            )}
-          </div>
-          <div className="text-[11px] text-slate-500 mt-1">
-            <span className="hidden sm:inline">{projectFpks.length} dokumen FPK terdaftar · </span>Klik untuk lihat
-          </div>
-        </div>
-
-        {/* Card 4: Status Dokumen SPK */}
-        <div
-          onClick={() => {
-            if (activeSpk) {
-              if (activeDoc?.type === 'spk' && activeDoc.id === activeSpk.id) requestCloseDoc();
-              else openDoc({ type: 'spk', id: activeSpk.id });
-            }
-          }}
-          className={cx(
-            'bg-white border rounded-xl p-3 sm:p-4 shadow-xs transition-colors',
-            activeSpk ? 'cursor-pointer hover:border-teal-300 hover:bg-slate-50/50' : '',
-            activeDoc?.type === 'spk' && activeSpk && activeDoc.id === activeSpk.id ? 'border-teal-600 ring-2 ring-teal-100' : 'border-slate-200'
-          )}
-        >
-          <div className="flex items-start justify-between gap-2 text-xs font-semibold text-slate-500 mb-1">
-            <span>Status SPK</span>
-            <FileCheck2 className="w-4 h-4 text-amber-500" />
-          </div>
-          <div className="mt-1">
-            <div className="flex flex-col items-start gap-2">
-              {activeSpk ? (
-                <div className="space-y-1">
-                  <Badge tone={SPK_STATUS[activeSpk.status].tone}>
-                    {SPK_STATUS[activeSpk.status].label}
-                  </Badge>
-                  <div className="text-[11px] text-indigo-600 font-mono font-medium">
-                    {activeSpk.number}
-                  </div>
-                </div>
-              ) : spkReadyFpk?.status === 'berjalan' ? (
-                <Badge tone="amber">Jalan tanpa SPK</Badge>
-              ) : (
-                <Badge tone="slate">Belum ada SPK</Badge>
-              )}
-              {canInputSpk && (
-                <Btn
-                  size="sm"
-                  icon={<Plus className="w-3.5 h-3.5" />}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    navigate(inputSpkHref);
-                  }}
-                >
-                  Input SPK
-                </Btn>
-              )}
-            </div>
-          </div>
-          <div className="text-[11px] text-slate-500 mt-1">
-            <span className="hidden sm:inline">{projectSpks.length} dokumen SPK terdaftar</span>{activeSpk ? <><span className="hidden sm:inline"> · </span>Klik untuk lihat</> : ''}
-          </div>
-        </div>
+      {/* Kartu ringkasan: satu skala (label 12px, nilai 18px, keterangan 13px) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        <SummaryCard icon={DollarSign} label="Nilai kontrak / bulan"
+          value={monthlyValue > 0 ? <Money value={monthlyValue} clientId={site.clientId} /> : '–'}
+          sub={durationMonths > 0 ? <>Est. {durationMonths} bln: <Money value={totalValue} clientId={site.clientId} /></> : 'Sebelum PPN'}
+        />
+        <SummaryCard icon={Calendar} label="Periode"
+          value={periodStart ? `${fmtDate(periodStart)} – ${fmtDate(periodEnd)}` : '–'}
+          valueClass="text-base sm:text-lg"
+          sub={durationDays > 0 ? `${durationDays} hari · ${endsIn}` : undefined}
+        />
+        <SummaryCard icon={FileText} label="Status FPK"
+          active={activeDoc?.type === 'fpk' && !!activeFpk && activeDoc.id === activeFpk.id}
+          onClick={activeFpk ? () => {
+            if (activeDoc?.type === 'fpk' && activeDoc.id === activeFpk.id) requestCloseDoc();
+            else openDoc({ type: 'fpk', id: activeFpk.id });
+          } : undefined}
+          value={fpkChip ? <StatusChip tone={fpkChip.tone} label={fpkChip.label} hint={fpkChip.hint} /> : <Badge tone="slate">Belum ada FPK</Badge>}
+          sub={activeFpk ? <span className="font-mono text-slate-700">{activeFpk.number}</span> : undefined}
+        />
+        <SummaryCard icon={FileCheck2} label="Status SPK"
+          active={activeDoc?.type === 'spk' && !!activeSpk && activeDoc.id === activeSpk.id}
+          onClick={activeSpk ? () => {
+            if (activeDoc?.type === 'spk' && activeDoc.id === activeSpk.id) requestCloseDoc();
+            else openDoc({ type: 'spk', id: activeSpk.id });
+          } : undefined}
+          value={activeSpk
+            ? <Badge tone={SPK_STATUS[activeSpk.status].tone}>{SPK_STATUS[activeSpk.status].label}</Badge>
+            : <Badge tone="slate">Belum ada SPK</Badge>}
+          sub={activeSpk ? <span className="font-mono text-slate-700">{activeSpk.number}</span> : undefined}
+        />
       </div>
 
-      {/* Tabs navigation */}
-      <div className="flex border-b border-slate-200 gap-6 text-sm overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {[
+      {/* Tab standar (sama dengan halaman lain) */}
+      <Tabs
+        value={activeTab}
+        onChange={k => setActiveTab(k as typeof activeTab)}
+        tabs={[
           { key: 'overview', label: 'Overview' },
           { key: 'keamanan', label: 'Personel Keamanan' },
           { key: 'kontrak', label: `Dokumen Kontrak (${projectFpks.length + projectSpks.length})` },
           { key: 'lampiran', label: `Lampiran (${attachments.length})` },
           { key: 'log', label: 'Log Activity' },
-        ].map(t => (
-          <button
-            key={t.key}
-            type="button"
-            onClick={() => setActiveTab(t.key as any)}
-            className={cx(
-              'pb-3 font-medium border-b-2 -mb-px transition-colors whitespace-nowrap',
-              activeTab === t.key
-                ? 'border-amber-400 text-slate-950 font-bold border-b-2'
-                : 'border-transparent text-slate-500 hover:text-slate-800'
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+        ]}
+      />
 
       {/* TAB 1: Overview (Lokasi & tim JISS, Klien) */}
       {activeTab === 'overview' && (() => {
@@ -415,188 +323,55 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
 
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Kartu kiri: Lokasi & tim JISS */}
-            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
-              <h3 className="text-sm font-semibold text-slate-900 mb-3.5">
-                Lokasi & tim JISS
-              </h3>
-              <div className="space-y-[10px]">
-                {/* 1. Alamat */}
-                <div className="flex items-start text-sm">
-                  <span className="w-[120px] shrink-0 text-[13px] text-slate-500 pt-0.5">Alamat</span>
-                  <div className="min-w-0 flex-1 text-slate-800 leading-relaxed">
-                    <span>{site.address}</span>
-                    <span className="text-slate-400 mx-1.5">·</span>
-                    <a
-                      href={mapUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center text-indigo-600 hover:text-indigo-800 hover:underline font-medium text-xs whitespace-nowrap"
-                    >
-                      Buka di peta ↗
-                    </a>
-                  </div>
-                </div>
-
-                {/* 2. Area */}
-                <div className="flex items-start text-sm">
-                  <span className="w-[120px] shrink-0 text-[13px] text-slate-500 pt-0.5">Area</span>
-                  <div className="min-w-0 flex-1 text-slate-800">
-                    <Link to={`/area/${site.areaId}`} className="text-indigo-600 hover:underline font-medium">
-                      {area?.name ?? '–'}
-                    </Link>
-                  </div>
-                </div>
-
-                {/* 3. Kode site */}
-                <div className="flex items-start text-sm">
-                  <span className="w-[120px] shrink-0 text-[13px] text-slate-500 pt-0.5">Kode site</span>
-                  <div className="min-w-0 flex-1 text-slate-800 font-mono text-xs">
-                    {site.code}
-                  </div>
-                </div>
-
-                {/* 4. Catatan (hanya tampil bila terisi) */}
-                {site.note && site.note.trim() && site.note !== '–' && (
-                  <div className="flex items-start text-sm">
-                    <span className="w-[120px] shrink-0 text-[13px] text-slate-500 pt-0.5">Catatan</span>
-                    <div className="min-w-0 flex-1 text-slate-700">
-                      {site.note}
-                    </div>
-                  </div>
-                )}
-
-                {/* 5. Garis pemisah tipis */}
-                <hr className="border-t border-slate-100 my-2.5" />
-
-                {/* 6. Bertugas */}
-                <div className="flex items-start text-sm">
-                  <span className="w-[120px] shrink-0 text-[13px] text-slate-500 pt-0.5">Bertugas</span>
-                  <div className="min-w-0 flex-1 text-slate-800 flex items-center flex-wrap gap-x-1.5">
-                    <span>{activePersonnelCount} personel</span>
-                    {kurang > 0 && (
-                      <span className="text-rose-600 font-medium">· kurang {kurang}</span>
-                    )}
-                    <span className="text-slate-400">·</span>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab('keamanan')}
-                      className="text-indigo-600 hover:text-indigo-800 hover:underline font-medium text-xs inline-flex items-center"
-                    >
-                      Lihat semua →
-                    </button>
-                  </div>
-                </div>
-
-                {/* 7. Danru */}
-                <div className="flex items-start text-sm">
-                  <span className="w-[120px] shrink-0 text-[13px] text-slate-500 pt-0.5">Danru</span>
-                  <div className="min-w-0 flex-1 text-slate-800">
-                    {danrus.length > 0 ? (
-                      <div className="space-y-1">
-                        {danrus.map(d => (
-                          <div key={d.id} className="text-sm text-slate-800">
-                            {d.name}
-                            {(d as any).shift ? <span className="text-slate-500 font-normal"> · {(d as any).shift}</span> : ''}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <span className="text-slate-400">Belum ada</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* 8. PIC area */}
-                <div className="flex items-start text-sm">
-                  <span className="w-[120px] shrink-0 text-[13px] text-slate-500 pt-0.5">PIC area</span>
-                  <div className="min-w-0 flex-1 text-slate-800 font-medium">
-                    {aa?.name ?? '–'}
-                  </div>
-                </div>
-
-                {/* 9. Account owner */}
-                <div className="flex items-start text-sm">
-                  <span className="w-[120px] shrink-0 text-[13px] text-slate-500 pt-0.5">Account owner</span>
-                  <div className="min-w-0 flex-1 text-slate-800 font-medium">
-                    {accountOwner?.name ?? '–'}
-                  </div>
-                </div>
-              </div>
-            </div>
+            {/* Kartu kiri: Lokasi & tim JISS (kode site & area dihapus: sudah ada di header) */}
+            <InfoCard title="Lokasi & tim JISS">
+              <InfoRow label="Alamat">
+                {/* Alamat bisa diklik (tab baru ke peta); petunjuk "Buka peta" muncul saat hover */}
+                <a href={mapUrl} target="_blank" rel="noopener noreferrer" className="group text-slate-800 hover:text-slate-950 hover:underline underline-offset-2" title="Buka di peta">
+                  {site.address}
+                  <span className="ml-2 whitespace-nowrap text-[13px] font-medium text-slate-500 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-visible:opacity-100 transition-opacity">Buka peta ↗</span>
+                </a>
+              </InfoRow>
+              {site.note && site.note.trim() && site.note !== '–' && <InfoRow label="Catatan">{site.note}</InfoRow>}
+              <hr className="border-slate-100" />
+              <InfoRow label="Bertugas">
+                {activePersonnelCount} personel
+                {kurang > 0 && <span className="text-rose-600 font-medium"> · kurang {kurang}</span>}
+                <button type="button" onClick={() => setActiveTab('keamanan')} aria-label="Lihat semua personel" title="Lihat semua personel" className="ml-1.5 inline-flex align-middle p-0.5 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-100"><ArrowRight className="w-4 h-4" /></button>
+              </InfoRow>
+              <InfoRow label="Danru">
+                {danrus.length > 0
+                  ? danrus.map(d => <div key={d.id}>{d.name}{(d as any).shift ? <span className="text-slate-500"> · {(d as any).shift}</span> : ''}</div>)
+                  : <span className="text-slate-400">Belum ada</span>}
+              </InfoRow>
+              <InfoRow label="PIC area">{aa?.name ?? '–'}</InfoRow>
+              <InfoRow label="Account owner">{accountOwner?.name ?? '–'}</InfoRow>
+            </InfoCard>
 
             {/* Kartu kanan: Klien */}
-            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs">
-              <h3 className="text-sm font-semibold text-slate-900 mb-3.5">
-                Klien
-              </h3>
-              <div className="space-y-[10px]">
-                {/* 1. PIC klien */}
-                <div className="flex items-start text-sm">
-                  <span className="w-[120px] shrink-0 text-[13px] text-slate-500 pt-0.5">PIC klien</span>
-                  <div className="min-w-0 flex-1 text-slate-800">
-                    {picFormatted ? (
-                      <span className="font-medium text-slate-900">{picFormatted}</span>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <span className="text-slate-400">Belum ada kontak PIC</span>
-                        {access.can('master.edit') && (
-                          <Link to={`/klien/${site.clientId}`} className="text-indigo-600 hover:underline text-xs font-medium">
-                            Tambahkan
-                          </Link>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* 2. Telepon */}
-                <div className="flex items-start text-sm">
-                  <span className="w-[120px] shrink-0 text-[13px] text-slate-500 pt-0.5">Telepon</span>
-                  <div className="min-w-0 flex-1 flex items-center justify-between gap-2">
-                    <span className="text-slate-800 font-mono text-xs">
-                      {client?.picPhone || '–'}
-                    </span>
-                    {client?.picPhone && (
-                      <button
-                        type="button"
-                        onClick={() => copyText(client.picPhone!, 'Nomor telepon')}
-                        className="text-xs text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-2 py-0.5 rounded font-medium transition-colors"
-                      >
-                        Salin
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* 3. Email */}
-                <div className="flex items-start text-sm">
-                  <span className="w-[120px] shrink-0 text-[13px] text-slate-500 pt-0.5">Email</span>
-                  <div className="min-w-0 flex-1 flex items-center justify-between gap-2">
-                    <span className="text-slate-800 font-mono text-xs truncate">
-                      {client?.picEmail || '–'}
-                    </span>
-                    {client?.picEmail && (
-                      <button
-                        type="button"
-                        onClick={() => copyText(client.picEmail!, 'Email')}
-                        className="text-xs text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-2 py-0.5 rounded font-medium transition-colors shrink-0"
-                      >
-                        Salin
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* 4. Termin bayar */}
-                <div className="flex items-start text-sm">
-                  <span className="w-[120px] shrink-0 text-[13px] text-slate-500 pt-0.5">Termin bayar</span>
-                  <div className="min-w-0 flex-1 text-slate-800 font-medium">
-                    {client?.termDays ? `${client.termDays} hari` : '30 hari'}
-                  </div>
-                </div>
-              </div>
-            </div>
+            <InfoCard title="Klien">
+              <InfoRow label="PIC klien">
+                {picFormatted ?? (
+                  <>
+                    <span className="text-slate-400">Belum ada kontak PIC</span>
+                    {access.can('master.edit') && <Link to={`/klien/${site.clientId}`} className={cx(LINK, 'ml-2')}>Tambahkan</Link>}
+                  </>
+                )}
+              </InfoRow>
+              <InfoRow label="Telepon">
+                <span className="inline-flex items-center gap-1.5">
+                  {client?.picPhone || '–'}
+                  {client?.picPhone && <CopyBtn label="Salin nomor telepon" onClick={() => copyText(client.picPhone!, 'Nomor telepon')} />}
+                </span>
+              </InfoRow>
+              <InfoRow label="Email">
+                <span className="inline-flex items-center gap-1.5 min-w-0 max-w-full">
+                  <span className="truncate">{client?.picEmail || '–'}</span>
+                  {client?.picEmail && <CopyBtn label="Salin email" onClick={() => copyText(client.picEmail!, 'Email')} />}
+                </span>
+              </InfoRow>
+              <InfoRow label="Termin bayar">{client?.termDays ? `${client.termDays} hari` : '30 hari'}</InfoRow>
+            </InfoCard>
           </div>
         );
       })()}
@@ -831,6 +606,9 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
       )}
 
       {/* TAB 4: Lampiran */}
+      {/* Linimasa di bawah daftar dokumen kontrak */}
+      {activeTab === 'kontrak' && <ContractTimeline siteId={site.id} onOpen={openDoc} />}
+
       {activeTab === 'lampiran' && (
         <Card
           title={
@@ -909,5 +687,56 @@ export const ProjectDetailPage: React.FC<{ id: string }> = ({ id }) => {
         />
       )}
     </div>
+  );
+};
+
+/**
+ * Linimasa kontrak: project dilihat dari sisi waktu.
+ * Setiap periode = SPK (dengan FPK asal dan memo perpanjangannya); celah tanpa SPK ditandai.
+ */
+const ContractTimeline: React.FC<{ siteId: string; onOpen: (d: ActiveDoc) => void }> = ({ siteId, onOpen }) => {
+  const { state, lookups } = useStore();
+  const site = lookups.site.get(siteId)!;
+  const ps = projectStatus(site, state);
+  const spks = state.spks.filter(x => x.siteId === siteId && x.type !== 'addendum').sort((a, b) => a.periodStart.localeCompare(b.periodStart));
+  const fpksNoSpk = state.fpks.filter(f => latest(f).siteId === siteId && !['batal', 'ditolak'].includes(f.status) && !spks.some(x => x.fpkId === f.id));
+  type Item = { key: string; date: string; title: React.ReactNode; meta?: React.ReactNode; tone: 'green' | 'amber' | 'red' | 'slate' | 'blue' };
+  const items: Item[] = [];
+  fpksNoSpk.forEach(f => items.push({
+    key: f.id, date: f.startedAt ?? latest(f).plannedStart, tone: f.startedAt ? 'amber' : 'slate',
+    title: <>FPK <button type="button" className="font-mono hover:underline" onClick={() => onOpen({ type: 'fpk', id: f.id })}>{f.number}</button> · {FPK_STATUS[f.status].label}</>,
+    meta: `${fmtDate(latest(f).periodStart)} – ${fmtDate(latest(f).periodEnd)}${f.startedAt ? ` · mulai jaga ${fmtDate(f.startedAt)}` : ` · rencana mulai ${fmtDate(latest(f).plannedStart)}`}`,
+  }));
+  spks.forEach(x => {
+    const f = x.fpkId ? lookups.fpk.get(x.fpkId) : undefined;
+    const memos = state.memos.filter(m => m.spkId === x.id);
+    items.push({
+      key: x.id, date: x.periodStart, tone: x.status === 'aktif' ? 'green' : x.status === 'perlu_revisi' ? 'amber' : x.status === 'berakhir' ? 'slate' : 'blue',
+      title: <>SPK <button type="button" className="font-mono hover:underline" onClick={() => onOpen({ type: 'spk', id: x.id })}>{x.number}</button> · {SPK_STATUS[x.status].label}</>,
+      meta: <>
+        {fmtDate(x.periodStart)} – {fmtDate(x.periodEnd)}
+        {f && <> · dari <button type="button" className="font-mono hover:underline" onClick={() => onOpen({ type: 'fpk', id: f.id })}>{f.number}</button></>}
+        {x.isInitialData && ' · data awal'}
+        {memos.map(m => <span key={m.id}> · memo <Link to={`/memo/${m.id}`} className="font-mono hover:underline">{m.number ?? 'draf'}</Link> ({MEMO_STATUS[m.status].label.toLowerCase()})</span>)}
+      </>,
+    });
+  });
+  if (ps.gap) items.push({ key: 'gap', date: ps.gap.from, tone: 'red', title: <>Jalan tanpa SPK · {ps.gap.days} hari</>, meta: `sejak ${fmtDate(ps.gap.from)}${ps.gap.lapsed ? ' (SPK lama berakhir)' : ''}` });
+  items.sort((a, b) => a.date.localeCompare(b.date));
+  const DOT = { green: 'bg-emerald-500', amber: 'bg-amber-500', red: 'bg-rose-500', slate: 'bg-slate-300', blue: 'bg-blue-500' };
+  return (
+    <Card title="Linimasa kontrak">
+      {items.length === 0 ? <p className="text-sm text-slate-500">Belum ada dokumen.</p> : (
+        <ol className="relative border-l border-slate-200 ml-1.5 space-y-4">
+          {items.map(it => (
+            <li key={it.key} className="pl-5 relative">
+              <span className={cx('absolute -left-[5px] top-1.5 w-2.5 h-2.5 rounded-full ring-4 ring-white', DOT[it.tone])} />
+              <div className="text-sm text-slate-900">{it.title}</div>
+              {it.meta && <div className="text-[13px] text-slate-500 mt-0.5">{it.meta}</div>}
+            </li>
+          ))}
+        </ol>
+      )}
+    </Card>
   );
 };

@@ -5,7 +5,7 @@ import {
   DollarSign, Users, MapPin, Undo2, Shield
 } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { ActivityLog, AttachmentChip, Badge, Btn, Money, cx } from '../../ui/kit';
+import { ActivityLog, AttachmentChip, Badge, Btn, Money, cx, PanelTopBar } from '../../ui/kit';
 import { fpkActivity, spkActivity } from '../../domain/activity';
 import { navigate, Link } from '../../router';
 import { FPK_STATUS, FPK_TYPE, SPK_STATUS, SPK_TYPE } from '../../domain/labels';
@@ -96,32 +96,16 @@ export const ProjectDocDrawer: React.FC<ProjectDocDrawerProps> = ({
         {/* Header Drawer */}
         <div className="px-5 py-4 border-b border-slate-200 bg-white sticky top-0 z-10 space-y-2">
           {/* Top Bar: Back history (if navigated from another doc) + Close */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 min-w-0">
-              {prevDocTitle && onBackDoc && (
-                <button
-                  type="button"
-                  onClick={onBackDoc}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-2 py-1 rounded-md transition-colors"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span className="truncate max-w-[180px]">{prevDocTitle}</span>
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                aria-label="Tutup drawer"
-                title="Tutup (Esc)"
-              >
-                <X className="w-5 h-5" />
+          <PanelTopBar
+            onClose={onClose}
+            fullHref={`/fpk/${f.id}`}
+            left={prevDocTitle && onBackDoc ? (
+              <button type="button" onClick={onBackDoc} className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-2 py-1 rounded-md transition-colors">
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span className="truncate max-w-[180px]">{prevDocTitle}</span>
               </button>
-            </div>
-          </div>
+            ) : undefined}
+          />
 
           {/* Doc Title & Status */}
           <div className="flex items-start justify-between gap-3">
@@ -343,12 +327,6 @@ export const ProjectDocDrawer: React.FC<ProjectDocDrawerProps> = ({
           </div>
         </div>
 
-        {/* Footer: satu aksi, buka halaman penuh */}
-        <div className="p-4 border-t border-slate-200 bg-slate-50/70 flex justify-end">
-          <Btn size="sm" icon={<ExternalLink className="w-3.5 h-3.5" />} onClick={() => navigate(`/fpk/${f.id}`)}>
-            Buka Halaman Penuh
-          </Btn>
-        </div>
       </div>
     );
   }
@@ -380,32 +358,16 @@ export const ProjectDocDrawer: React.FC<ProjectDocDrawerProps> = ({
         {/* Header Drawer */}
         <div className="px-5 py-4 border-b border-slate-200 bg-white sticky top-0 z-10 space-y-2">
           {/* Top Bar: Back history + Close */}
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 min-w-0">
-              {prevDocTitle && onBackDoc && (
-                <button
-                  type="button"
-                  onClick={onBackDoc}
-                  className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-2 py-1 rounded-md transition-colors"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span className="truncate max-w-[180px]">{prevDocTitle}</span>
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={onClose}
-                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
-                aria-label="Tutup drawer"
-                title="Tutup (Esc)"
-              >
-                <X className="w-5 h-5" />
+          <PanelTopBar
+            onClose={onClose}
+            fullHref={`/spk/${s.id}`}
+            left={prevDocTitle && onBackDoc ? (
+              <button type="button" onClick={onBackDoc} className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 px-2 py-1 rounded-md transition-colors">
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span className="truncate max-w-[180px]">{prevDocTitle}</span>
               </button>
-            </div>
-          </div>
+            ) : undefined}
+          />
 
           {/* Doc Title & Status */}
           <div className="flex items-start justify-between gap-3">
@@ -598,12 +560,6 @@ export const ProjectDocDrawer: React.FC<ProjectDocDrawerProps> = ({
           </div>
         </div>
 
-        {/* Footer: satu aksi, buka halaman penuh */}
-        <div className="p-4 border-t border-slate-200 bg-slate-50/70 flex justify-end">
-          <Btn size="sm" icon={<ExternalLink className="w-3.5 h-3.5" />} onClick={() => navigate(`/spk/${s.id}`)}>
-            Buka Halaman Penuh
-          </Btn>
-        </div>
       </div>
     );
   }

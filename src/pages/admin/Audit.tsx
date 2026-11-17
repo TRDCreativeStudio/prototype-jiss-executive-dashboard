@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Lock } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { Card, Input, PageHeader, Select, Table, Td, Tr, TableEmpty } from '../../ui/kit';
+import { Card, Input, PageHeader, Select, Table, Td, Tr, TableEmpty, usePaged } from '../../ui/kit';
 import { fmtDateTime } from '../../domain/time';
 
 export const AuditPage: React.FC = () => {
@@ -18,6 +18,7 @@ export const AuditPage: React.FC = () => {
   const val = (v: string | undefined, money?: boolean) =>
     !v ? '–' : money && !seeMoney ? <span className="inline-flex items-center gap-1 text-slate-400"><Lock className="w-3 h-3" />nilai disamarkan</span> : v;
 
+  const { pageRows, pager } = usePaged(rows);
   return (
     <div>
       <PageHeader title="Audit log" subtitle="Append-only: tidak ada yang bisa mengubah atau menghapus. Nilai uang disamarkan untuk peran yang tidak boleh melihat uang." />
@@ -35,7 +36,7 @@ export const AuditPage: React.FC = () => {
       </div>
       <Card pad={false}>
         <Table head={['Waktu', 'Oleh', 'Entitas', 'Aksi', 'Sebelum', 'Sesudah']}>
-          {rows.map(a => (
+          {pageRows.map(a => (
             <Tr key={a.id}>
               <Td className="whitespace-nowrap">{fmtDateTime(a.at)}</Td>
               <Td>
@@ -50,6 +51,7 @@ export const AuditPage: React.FC = () => {
           ))}
         </Table>
         {rows.length === 0 && <TableEmpty>Tidak ada catatan.</TableEmpty>}
+        {pager}
       </Card>
     </div>
   );

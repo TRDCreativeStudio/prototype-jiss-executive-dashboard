@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Btn, ErrorText, Field, Select as Sel, Textarea, toast, Tr, CellMain, CellCode } from '../../ui/kit';
+import { Btn, ErrorText, Field, Select as Sel, Textarea, toast, Tr, CellMain, CellCode, usePaged } from '../../ui/kit';
 import { has } from '../../domain/rbac';
 import { useStore } from '../../store/store';
 import { Badge, Card, DL, PageHeader, SearchBox, Select, Table, Td, ExportBtn, exportCsv } from '../../ui/kit';
@@ -21,6 +21,7 @@ export const SecurityPage: React.FC = () => {
     .filter(p => `${p.employeeNo} ${p.name}`.toLowerCase().includes(q.toLowerCase()));
   const counts = (Object.keys(PERSONNEL_STATUS) as PersonnelStatus[]).map(k => [k, rows.filter(p => p.status === k).length] as const);
 
+  const { pageRows, pager } = usePaged(rows);
   return (
     <div>
       <PageHeader
@@ -44,7 +45,7 @@ export const SecurityPage: React.FC = () => {
       </div>
       <Card pad={false}>
         <Table head={['No induk', 'Nama', 'Jabatan', 'Area / site', 'Status', 'Seragam / sepatu', 'Mulai penempatan']}>
-          {rows.map(p => {
+          {pageRows.map(p => {
             const pl = currentPlacement(p);
             return (
               <Tr key={p.id} to={`/security/${p.id}`}>
@@ -62,6 +63,7 @@ export const SecurityPage: React.FC = () => {
             );
           })}
         </Table>
+        {pager}
       </Card>
     </div>
   );

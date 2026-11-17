@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { Pencil } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { Badge, Card, Table, Td, Tr, CellMain, CellCode, TableEmpty, Money, cx } from '../../ui/kit';
+import { Badge, Card, Table, Td, Tr, CellMain, CellCode, TableEmpty, Money, cx, Tabs } from '../../ui/kit';
 import { Link } from '../../router';
 import { FPK_STATUS, SPK_STATUS } from '../../domain/labels';
 import { activeByPosition, effectiveSpks, latest, quotaByPosition, spkHeadcount } from '../../domain/selectors';
@@ -110,3 +111,25 @@ export const runningIn = (state: { fpks: Fpk[]; spks: Spk[] }, siteIds: Set<stri
 };
 
 export const muted = (active: boolean) => cx(!active && 'opacity-60');
+
+/** Tab Aktif / Nonaktif untuk daftar master data (pengganti kolom Status). */
+export function useActiveTabs<T extends { active: boolean }>(rows: T[]) {
+  const [tab, setTab] = useState<'aktif' | 'nonaktif'>('aktif');
+  const active = rows.filter(r => r.active);
+  const inactive = rows.filter(r => !r.active);
+  const tabs = (
+    <Tabs value={tab} onChange={k => setTab(k as 'aktif' | 'nonaktif')} tabs={[
+      { key: 'aktif', label: `Aktif (${active.length})` },
+      { key: 'nonaktif', label: `Nonaktif (${inactive.length})` },
+    ]} />
+  );
+  return { tab, tabs, rows: tab === 'aktif' ? active : inactive };
+}
+
+/** Tombol ubah ringkas di ujung baris (ikon saja). */
+export const EditIconBtn: React.FC<{ onClick: () => void; label?: string }> = ({ onClick, label = 'Ubah' }) => (
+  <button type="button" onClick={onClick} aria-label={label} title={label}
+    className="p-1.5 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100">
+    <Pencil className="w-4 h-4" />
+  </button>
+);

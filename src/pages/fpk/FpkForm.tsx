@@ -606,59 +606,22 @@ export const FpkFormPage: React.FC<{ fpkId?: string }> = ({ fpkId }) => {
     : 'Proyek baru';
 
   return (
-    <div className="max-w-[1120px] mx-auto px-4 md:px-8 pt-4 sm:pt-7 pb-24">
-      {/* Header Halaman (Mobile Optimized & Desktop Responsive) */}
-      <div className="mb-5 sm:mb-6 space-y-2.5 sm:space-y-0">
-        {/* Mobile Top Navigation & Status Bar */}
-        <div className="flex sm:hidden items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={handleBackClick}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 py-1 px-2 -ml-2 rounded-lg hover:bg-slate-100 transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Kembali</span>
+    <div className="pb-40 lg:pb-24">
+      {/* Header sama dengan halaman lain (PageHeader): Kembali, judul, deskripsi */}
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 mb-5">
+        <div className="min-w-0">
+          <button type="button" onClick={handleBackClick} className="inline-flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800 mb-2">
+            <ArrowLeft className="w-3.5 h-3.5" /> Kembali
           </button>
-          {saveStatus && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              {saveStatus}
-            </span>
-          )}
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">{pageTitle}</h1>
+          <div className="text-sm text-slate-500 mt-1">Isi data penawaran untuk memproses FPK ke divisi terkait.</div>
         </div>
-
-        {/* Desktop & Mobile Main Header Row */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-          <div className="flex items-start sm:items-center gap-3 min-w-0">
-            {/* Desktop Back Arrow */}
-            <button
-              type="button"
-              onClick={handleBackClick}
-              className="hidden sm:flex p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors shrink-0"
-              aria-label="Kembali"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </button>
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
-                {pageTitle}
-              </h1>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Isi data penawaran untuk memproses FPK ke divisi terkait.
-              </p>
-            </div>
-          </div>
-
-          {/* Desktop Right Status */}
-          {saveStatus && (
-            <div className="hidden sm:flex shrink-0 items-center">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                {saveStatus}
-              </span>
-            </div>
-          )}
-        </div>
+        {saveStatus && (
+          <span className="inline-flex items-center gap-1.5 self-start sm:self-auto px-2.5 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            {saveStatus}
+          </span>
+        )}
       </div>
 
       {/* Main Grid: Form (1 kartu, kiri) + Sticky Panel (300px, kanan) */}
@@ -1388,29 +1351,19 @@ export const FpkFormPage: React.FC<{ fpkId?: string }> = ({ fpkId }) => {
 
       {/* Mobile Sticky Bottom Bar (< 1024px) */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 px-4 py-3 shadow-lg">
-        <div className="flex items-center justify-between gap-2 max-w-lg mx-auto">
+        {/* HP: status di atas, dua tombol selebar layar di bawah (mudah disentuh) */}
+        <div className="max-w-lg mx-auto space-y-2.5">
           <button
             type="button"
             onClick={() => setShowMobileSummarySheet(!showMobileSummarySheet)}
-            className="flex items-center gap-1.5 text-xs font-semibold text-slate-700"
+            className="w-full flex items-center justify-between text-sm font-semibold text-slate-700"
           >
             <span>{isReady ? 'Siap dikirim' : `${remainingCount} hal belum lengkap`}</span>
-            <ChevronUp className={cx('w-4 h-4 transition-transform', showMobileSummarySheet && 'rotate-180')} />
+            <span className="inline-flex items-center gap-1 text-[13px] font-medium text-slate-500">Lihat <ChevronUp className={cx('w-4 h-4 transition-transform', showMobileSummarySheet && 'rotate-180')} /></span>
           </button>
-          <div className="flex items-center gap-2">
-            <Btn
-              size="sm"
-              variant="secondary"
-              onClick={() => handleSaveDraft(false)}
-            >
-              Simpan draf
-            </Btn>
-            <Btn
-              size="sm"
-              onClick={handleAttemptSubmit}
-            >
-              Kirim ke cek
-            </Btn>
+          <div className="grid grid-cols-2 gap-2">
+            <Btn variant="secondary" className="whitespace-nowrap" onClick={() => handleSaveDraft(false)}>Simpan draf</Btn>
+            <Btn className="whitespace-nowrap" onClick={handleAttemptSubmit}>Kirim ke cek</Btn>
           </div>
         </div>
       </div>

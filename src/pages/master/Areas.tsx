@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { Plus, Pencil } from 'lucide-react';
+import { Plus, Pencil, UserCheck, MapPin, Users } from 'lucide-react';
 import { useStore } from '../../store/store';
-import { Btn, Card, DL, ErrorText, ExportBtn, Field, Input, Modal, PageHeader, SearchBox, Select, Table, Td, Textarea, exportCsv, runAction, Badge, Tr, CellMain, CellCode } from '../../ui/kit';
-import { Link } from '../../router';
-import { ActiveBadge, FpkMiniTable, QuotaTable, SpkMiniTable, muted, runningIn } from './common';
+import { Btn, Card, ErrorText, ExportBtn, Field, Input, Modal, PageHeader, SearchBox, Select, Table, Td, Textarea, exportCsv, runAction, Badge, Tr, CellMain, CellCode, usePaged, StatusChip, SummaryCard, TableEmpty } from '../../ui/kit';
+import { ActiveBadge, EditIconBtn, FpkMiniTable, QuotaTable, SpkMiniTable, runningIn, useActiveTabs } from './common';
 import { NotFound } from '../Misc';
 import { activeByPosition, quotaByPosition } from '../../domain/selectors';
 import type { Area } from '../../domain/types';
@@ -50,9 +49,10 @@ export const AreasPage: React.FC = () => {
   const [q, setQ] = useState('');
   const [edit, setEdit] = useState<Area | null | 'new'>(null);
   const editable = access.can('master.edit');
-  const rows = state.areas
+  const searched = state.areas
     .filter(a => access.area(a.id))
-    .filter(a => `${a.code} ${a.name}`.toLowerCase().includes(q.toLowerCase()));
+    .filter(a => `${a.code} ${a.name} ${lookups.user.get(a.picUserId ?? '')?.name ?? ''}`.toLowerCase().includes(q.toLowerCase()));
+  const { tabs, rows } = useActiveTabs(searched);
 
   const stats = (a: Area) => {
     const siteIds = new Set(state.sites.filter(s => s.areaId === a.id).map(s => s.id));
@@ -60,40 +60,47 @@ export const AreasPage: React.FC = () => {
     return { sites: siteIds.size, clients: clients.size, quota: sum(quotaByPosition(state.spks, siteIds)), actual: sum(activeByPosition(state.personnel, a.id)) };
   };
 
+  const { pageRows, pager } = usePaged(rows);
   return (
     <div>
       <PageHeader
         title="Area"
         subtitle="Wilayah operasional JISS. Satu area mengurus banyak site dari banyak klien."
         actions={<>
-          <ExportBtn onClick={() => exportCsv('area.csv', [['Kode', 'Nama', 'PIC utama', 'PIC cadangan', 'Site', 'Status'], ...rows.map(a => [a.code, a.name, lookups.user.get(a.picUserId ?? '')?.name ?? '', lookups.user.get(a.backupPicUserId ?? '')?.name ?? '', stats(a).sites, a.active ? 'Aktif' : 'Nonaktif'])])} />
+          <ExportBtn onClick={() => exportCsv('area.csv', [['Kode', 'Nama', 'PIC utama', 'PIC cadangan', 'Site', 'Status'], ...searched.map(a => [a.code, a.name, lookups.user.get(a.picUserId ?? '')?.name ?? '', lookups.user.get(a.backupPicUserId ?? '')?.name ?? '', stats(a).sites, a.active ? 'Aktif' : 'Nonaktif'])])} />
           {editable && <Btn size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setEdit('new')}>Tambah area</Btn>}
         </>}
       />
-      <div className="mb-3"><SearchBox value={q} onChange={setQ} placeholder="Cari kode atau nama area" /></div>
+      {tabs}
+      <div className="flex flex-col sm:flex-row gap-2 mb-3"><SearchBox value={q} onChange={setQ} placeholder="Cari area atau PIC" /></div>
       <Card pad={false}>
-        <Table head={['Kode', 'Nama', 'PIC area (AA)', 'Site / klien', 'Security aktif / kuota', 'Status', '']}>
-          {rows.map(a => {
+        <Table head={['Kode', 'Area', 'PIC area', 'Site', 'Security aktif / kuota', '']}>
+          {pageRows.map(a => {
             const st = stats(a);
+            const short = st.quota - st.actual;
             return (
-              <Tr key={a.id} to={`/area/${a.id}`} muted={!a.active}>
+              <Tr key={a.id} to={`/area/${a.id}`}>
                 <Td><CellCode>{a.code}</CellCode></Td>
                 <Td><CellMain>{a.name}</CellMain></Td>
                 <Td>
-                  <div>{lookups.user.get(a.picUserId ?? '')?.name ?? <span className="text-rose-600 font-semibold">Belum ada PIC</span>}</div>
-                  {a.backupPicUserId && <div className="text-[13px] text-slate-500 mt-0.5">Cadangan: {lookups.user.get(a.backupPicUserId)?.name}</div>}
+                  {a.picUserId
+                    ? <span className="text-sm text-slate-800">{lookups.user.get(a.picUserId)?.name}{a.backupPicUserId && <span className="text-slate-500"> · cadangan {lookups.user.get(a.backupPicUserId)?.name}</span>}</span>
+                    : <StatusChip tone="red" label="Belum ada PIC" hint={{ kind: 'info', text: 'Tugas PIC area jatuh ke kepala Operasional sampai PIC diisi.' }} />}
                 </Td>
-                <Td className="tabular-nums">{st.sites} site · {st.clients} klien</Td>
-                <Td className="tabular-nums">
-                  {st.actual} / {st.quota}
-                  {st.actual < st.quota && <Badge tone="red" className="ml-2">Kurang {st.quota - st.actual}</Badge>}
+                <Td className="tabular-nums whitespace-nowrap">{st.sites} site <span className="text-slate-400">·</span> {st.clients} klien</Td>
+                <Td className="tabular-nums whitespace-nowrap">
+                  <span className="inline-flex items-center gap-2">
+                    {st.actual} / {st.quota}
+                    {short > 0 ? <Badge tone="red">Kurang {short}</Badge> : short < 0 ? <Badge tone="amber">Lebih {-short}</Badge> : st.quota > 0 ? <Badge tone="green">Pas</Badge> : null}
+                  </span>
                 </Td>
-                <Td><ActiveBadge active={a.active} /></Td>
-                <Td>{editable && <Btn size="sm" variant="ghost" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => setEdit(a)}>Ubah</Btn>}</Td>
+                <Td className="text-right">{editable && <EditIconBtn onClick={() => setEdit(a)} label={`Ubah area ${a.name}`} />}</Td>
               </Tr>
             );
           })}
         </Table>
+        {rows.length === 0 && <TableEmpty>Tidak ada area.</TableEmpty>}
+        {pager}
       </Card>
       {edit && <AreaForm area={edit === 'new' ? null : edit} onClose={() => setEdit(null)} />}
     </div>
@@ -109,37 +116,40 @@ export const AreaDetail: React.FC<{ id: string }> = ({ id }) => {
   const siteIds = new Set(sites.map(s => s.id));
   const running = runningIn(state, siteIds);
   const byClient = [...new Set(sites.map(s => s.clientId))];
+  const quota = sum(quotaByPosition(state.spks, siteIds));
+  const actual = sum(activeByPosition(state.personnel, a.id));
 
   return (
     <div className="space-y-5">
       <PageHeader
         back="/area"
         title={`Area ${a.name}`}
-        subtitle={<span className="font-mono text-xs">{a.code}</span>}
+        subtitle={<span className="inline-flex items-center gap-2"><span className="font-mono text-[13px]">{a.code}</span>{!a.active && <ActiveBadge active={false} />}</span>}
         actions={access.can('master.edit') && <Btn size="sm" variant="secondary" icon={<Pencil className="w-3.5 h-3.5" />} onClick={() => setEdit(true)}>Ubah</Btn>}
       />
-      <Card>
-        <DL items={[
-          ['PIC area utama (AA)', lookups.user.get(a.picUserId ?? '')?.name ?? 'Belum ada, tugas jatuh ke kepala Operasional'],
-          ['PIC area cadangan', lookups.user.get(a.backupPicUserId ?? '')?.name ?? '–'],
-          ['Status', <ActiveBadge active={a.active} />],
-          ['Keterangan', a.note ?? '–'],
-        ]} />
-      </Card>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+        <SummaryCard icon={UserCheck} label="PIC area" value={lookups.user.get(a.picUserId ?? '')?.name ?? 'Belum ada'} valueClass="text-base"
+          tone={a.picUserId ? undefined : 'red'} sub={a.picUserId ? undefined : 'tugas jatuh ke kepala Operasional'} />
+        <SummaryCard icon={UserCheck} label="PIC cadangan" value={lookups.user.get(a.backupPicUserId ?? '')?.name ?? '–'} valueClass="text-base" />
+        <SummaryCard icon={MapPin} label="Site" value={`${sites.length} site`} valueClass="text-base" sub={`${byClient.length} klien`} />
+        <SummaryCard icon={Users} label="Security aktif / kuota" value={`${actual} / ${quota}`} valueClass="text-base"
+          tone={actual < quota ? 'red' : undefined} sub={actual < quota ? `kurang ${quota - actual}` : actual > quota ? `lebih ${actual - quota}` : 'pas'} />
+      </div>
+      {a.note && <p className="text-sm text-slate-600">{a.note}</p>}
       <QuotaTable areaId={a.id} />
-      <Card title={`Site di area ini (${sites.length}), dikelompokkan per klien`} pad={false}>
-        <Table head={['Klien', 'Site', 'Alamat', 'Status']}>
+      <Card title={`Site di area ini (${sites.length})`} pad={false}>
+        <Table head={['Klien', 'Site', 'Alamat']}>
           {byClient.flatMap(cid =>
             sites.filter(s => s.clientId === cid).map((s, i) => (
               <Tr key={s.id} to={`/site/${s.id}`} muted={!s.active}>
                 <Td>{i === 0 && <CellMain>{lookups.client.get(cid)?.name}</CellMain>}</Td>
-                <Td><CellMain>{s.name}</CellMain></Td>
+                <Td className="text-sm text-slate-800">{s.name}{!s.active && <span className="text-slate-500"> · nonaktif</span>}</Td>
                 <Td className="text-[13px] text-slate-500">{s.address}</Td>
-                <Td><ActiveBadge active={s.active} /></Td>
               </Tr>
             )),
           )}
         </Table>
+        {sites.length === 0 && <TableEmpty>Belum ada site.</TableEmpty>}
       </Card>
       {access.can('fpk.view') && <FpkMiniTable fpks={running.fpks} />}
       {access.can('spk.view') && <SpkMiniTable spks={running.spks} title="SPK aktif dan dalam proses" />}

@@ -23,9 +23,9 @@ import { FpkFormPage } from './pages/fpk/FpkForm';
 import { SpkListPage } from './pages/spk/SpkList';
 import { SpkDetailPage } from './pages/spk/SpkDetail';
 import { SpkFormPage } from './pages/spk/SpkForm';
-import { WithoutSpkPage } from './pages/spk/WithoutSpk';
 import { SecurityPage, SecurityDetail } from './pages/people/Security';
 import { MemoListPage, MemoNewPage, MemoDetailPage } from './pages/memo/Memo';
+import { WithoutSpkPage } from './pages/spk/WithoutSpk';
 import { ProjectListPage } from './pages/project/ProjectList';
 import { ProjectDetailPage } from './pages/project/ProjectDetail';
 
@@ -84,7 +84,7 @@ const Router: React.FC = () => {
 const Shell: React.FC = () => {
   const [menu, setMenu] = useState(false);
   return (
-    <div className="flex min-h-screen bg-slate-50 text-slate-900">
+    <div className="flex min-h-screen w-screen bg-slate-50 text-slate-900">
       <Sidebar open={menu} onClose={() => setMenu(false)} />
       <div className="flex-1 min-w-0 flex flex-col">
         <Topbar onMenu={() => setMenu(true)} />

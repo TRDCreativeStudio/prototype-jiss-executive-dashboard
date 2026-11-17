@@ -147,3 +147,18 @@ export const TASK_KIND_LABEL: Record<Task['kind'], string> = {
   spk_berakhir_jaga: 'SPK berakhir, personel masih jaga',
   demobilisasi: 'Demobilisasi',
 };
+
+/**
+ * Tugas yang sedang menunggu pihak lain (pemilik tidak bisa berbuat apa-apa dulu).
+ * Tetap tampil di Tugas Saya, tapi dipisah dan tidak dihitung di badge.
+ */
+export const waitingOn = (t: Task, spks: { fpkId?: string; status: string; number: string }[]): string | null => {
+  if (t.kind === 'kejar_spk') {
+    const sp = spks.find(s => s.fpkId === t.refId && s.status === 'diinput');
+    if (sp) return `${sp.number} sudah diinput · menunggu verifikasi Finance`;
+  }
+  return null;
+};
+
+/** Tugas yang langsung naik ke BOD bila lewat batas (tanpa lewat kepala divisi). */
+export const BOD_DIRECT_KINDS: Task['kind'][] = ['kejar_spk', 'memo', 'kirim_memo', 'catat_jawaban', 'spk_berakhir_jaga', 'urus_spk_salah'];
